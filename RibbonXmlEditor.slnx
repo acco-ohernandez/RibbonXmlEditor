@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="RibbonXmlEditor/RibbonXmlEditor.csproj" />
+  <Project Path="RibbonXmlEditor.Tests/RibbonXmlEditor.Tests.csproj" />
+</Solution>
