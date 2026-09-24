@@ -1,0 +1,50 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="clr-namespace:RibbonXmlEditor.ViewModels">
+
+    <BooleanToVisibilityConverter x:Key="TreeBoolToVis" />
+
+    <Style x:Key="RibbonTreeItemStyle" TargetType="TreeViewItem">
+        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+        <Setter Property="Padding" Value="1" />
+    </Style>
+
+    <HierarchicalDataTemplate DataType="{x:Type vm:NodeViewModel}" ItemsSource="{Binding Children}">
+        <StackPanel Orientation="Horizontal" Margin="0,1" ToolTip="{Binding Description}" Background="Transparent">
+            <StackPanel.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="_Add"
+                              ItemsSource="{Binding AddChildOptions}"
+                              Visibility="{Binding CanAddChildren, Converter={StaticResource TreeBoolToVis}}">
+                        <MenuItem.ItemContainerStyle>
+                            <Style TargetType="MenuItem">
+                                <Setter Property="Header" Value="{Binding DisplayName}" />
+                                <Setter Property="Command" Value="{Binding Command}" />
+                            </Style>
+                        </MenuItem.ItemContainerStyle>
+                    </MenuItem>
+                    <MenuItem Header="D_uplicate" Command="{Binding DuplicateCommand}" />
+                    <Separator />
+                    <MenuItem Header="Move _Up" Command="{Binding MoveUpCommand}" InputGestureText="Alt+Up" />
+                    <MenuItem Header="Move _Down" Command="{Binding MoveDownCommand}" InputGestureText="Alt+Down" />
+                    <Separator />
+                    <MenuItem Header="_Delete" Command="{Binding DeleteCommand}" InputGestureText="Del" />
+                </ContextMenu>
+            </StackPanel.ContextMenu>
+
+            <Border Width="30" Height="18" CornerRadius="3" Background="{Binding GlyphBrush}" Margin="0,0,6,0">
+                <TextBlock Text="{Binding Glyph}" Foreground="White" FontSize="10" FontWeight="Bold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <TextBlock Text="{Binding Header}" VerticalAlignment="Center" />
+            <Ellipse Width="8" Height="8" Fill="#D32F2F" Margin="6,0,0,0" VerticalAlignment="Center"
+                     ToolTip="Contains errors"
+                     Visibility="{Binding HasError, Converter={StaticResource TreeBoolToVis}}" />
+            <Ellipse Width="8" Height="8" Fill="#F9A825" Margin="6,0,0,0" VerticalAlignment="Center"
+                     ToolTip="Contains warnings"
+                     Visibility="{Binding HasWarning, Converter={StaticResource TreeBoolToVis}}" />
+        </StackPanel>
+    </HierarchicalDataTemplate>
+
+</ResourceDictionary>
