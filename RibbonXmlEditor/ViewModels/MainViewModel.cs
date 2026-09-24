@@ -1,101 +1,72 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Windows;
-using System.Windows.Threading;
 using RibbonXmlEditor.Models;
 using RibbonXmlEditor.Services;
 
 namespace RibbonXmlEditor.ViewModels;
 
+/// <summary>The window shell: the list of open ribbon files (tabs), the active one, and file-level commands.</summary>
 public sealed class MainViewModel : ObservableObject
 {
-    private const string DeployedRoot = @"C:\ACCORevit\";
-
     private readonly AppSettings _settings = AppSettings.Current;
-    private readonly DispatcherTimer _revalidateTimer;
-    private readonly List<Issue> _loadIssues = new();
-
-    private DocumentViewModel? _document;
-    private NodeViewModel? _selectedNode;
-    private bool _noticeDismissed;
+    private EditorViewModel? _activeDocument;
 
     public MainViewModel()
     {
-        _revalidateTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(250) };
-        _revalidateTimer.Tick += (_, _) => { _revalidateTimer.Stop(); Revalidate(); };
-
         NewCommand = new RelayCommand(NewBlank);
         NewFromTemplateCommand = new RelayCommand(NewFromTemplate);
         OpenCommand = new RelayCommand(Open);
         OpenRecentCommand = new RelayCommand<string>(OpenFile);
-        SaveCommand = new RelayCommand(() => Save(), () => Document is not null);
-        SaveAsCommand = new RelayCommand(() => SaveAs(), () => Document is not null);
-        CloseCommand = new RelayCommand(CloseDocument, () => Document is not null);
         OpenBackupsFolderCommand = new RelayCommand(OpenBackupsFolder);
-        ExitCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
-        SelectDllCommand = new RelayCommand(SelectDll, () => Document is not null);
-        RescanDllCommand = new RelayCommand(RescanDll, () => Document?.DllPath is not null);
         SetImagesFolderCommand = new RelayCommand(SetImagesFolder);
         AboutCommand = new RelayCommand(About);
-        DismissNoticeCommand = new RelayCommand(() => { _noticeDismissed = true; OnPropertyChanged(nameof(ShowDeployedNotice)); });
+        ExitCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
 
+        SaveCommand = new RelayCommand(() => ActiveDocument?.Save(), () => ActiveDocument is not null);
+        SaveAsCommand = new RelayCommand(() => ActiveDocument?.SaveAs(), () => ActiveDocument is not null);
+        SaveAllCommand = new RelayCommand(SaveAll, () => HasDocuments);
+        SelectDllCommand = new RelayCommand(() => ActiveDocument?.SelectDllCommand.Execute(null), () => ActiveDocument is not null);
+        RescanDllCommand = new RelayCommand(() => ActiveDocument?.RescanDllCommand.Execute(null), () => ActiveDocument?.HasDll == true);
+        CloseActiveCommand = new RelayCommand(() => { if (ActiveDocument is { } d) CloseTab(d); }, () => ActiveDocument is not null);
+        CloseTabCommand = new RelayCommand<EditorViewModel>(tab => CloseTab(tab));
+        CloseOthersCommand = new RelayCommand<EditorViewModel>(CloseOthers);
+        CloseAllCommand = new RelayCommand(() => CloseAll(), () => HasDocuments);
+
+        Documents.CollectionChanged += OnDocumentsChanged;
         RecentFiles = new ObservableCollection<string>(_settings.RecentFiles);
-        NewBlank(confirm: false);
     }
 
     // ---- state -----------------------------------------------------------------------
 
-    public DocumentViewModel? Document
+    public ObservableCollection<EditorViewModel> Documents { get; } = new();
+
+    public EditorViewModel? ActiveDocument
     {
-        get => _document;
-        private set
+        get => _activeDocument;
+        set
         {
-            if (_document is not null)
-            {
-                _document.Changed -= OnDocumentChanged;
-                _document.NodeSelected -= OnNodeSelected;
-                _document.PropertyChanged -= OnDocumentPropertyChanged;
-            }
-            _document = value;
-            if (_document is not null)
-            {
-                _document.Changed += OnDocumentChanged;
-                _document.NodeSelected += OnNodeSelected;
-                _document.PropertyChanged += OnDocumentPropertyChanged;
-            }
+            if (ReferenceEquals(_activeDocument, value))
+                return;
+            _activeDocument?.Document.ClosePreviewPopups();
+            _activeDocument = value;
             OnPropertyChanged();
-            NotifyHeaderProperties();
-            SaveCommand.RaiseCanExecuteChanged();
-            SaveAsCommand.RaiseCanExecuteChanged();
-            CloseCommand.RaiseCanExecuteChanged();
-            SelectDllCommand.RaiseCanExecuteChanged();
-            RescanDllCommand.RaiseCanExecuteChanged();
+            OnPropertyChanged(nameof(Title));
+            RaiseActiveCommands();
         }
     }
 
-    public NodeViewModel? SelectedNode
-    {
-        get => _selectedNode;
-        private set => SetProperty(ref _selectedNode, value);
-    }
+    public bool HasDocuments => Documents.Count > 0;
 
     public ObservableCollection<string> RecentFiles { get; }
-    public ObservableCollection<IssueViewModel> Issues { get; } = new();
 
-    public int ErrorCount => Issues.Count(i => i.IsError);
-    public int WarningCount => Issues.Count(i => !i.IsError);
-    public string IssueSummary => Issues.Count == 0 ? "No issues" : $"{ErrorCount} error(s), {WarningCount} warning(s)";
-
-    public string Title => Document is null
-        ? "Ribbon XML Editor"
-        : $"{Document.DisplayName}{(Document.IsDirty ? " *" : string.Empty)} - Ribbon XML Editor";
-
-    public string StatusPath => Document is null ? "No file open" : Document.FilePath ?? "Not saved yet";
-    public bool IsDeployedCopy => Document?.FilePath?.StartsWith(DeployedRoot, StringComparison.OrdinalIgnoreCase) == true;
-    public bool ShowDeployedNotice => IsDeployedCopy && !_noticeDismissed;
     public string ImagesFolder => _settings.EffectiveImagesFolder;
-    public string DllStatusText => Document?.DllStatusText ?? string.Empty;
+
+    public string Title => ActiveDocument is null ? "Ribbon XML Editor" : $"{ActiveDocument.Header} - Ribbon XML Editor";
+
+    /// <summary>Asks the window to close (after the usual save prompts).</summary>
+    public event EventHandler? RequestClose;
 
     // ---- commands --------------------------------------------------------------------
 
@@ -103,43 +74,32 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand NewFromTemplateCommand { get; }
     public RelayCommand OpenCommand { get; }
     public RelayCommand<string> OpenRecentCommand { get; }
-    public RelayCommand SaveCommand { get; }
-    public RelayCommand SaveAsCommand { get; }
-    public RelayCommand CloseCommand { get; }
     public RelayCommand OpenBackupsFolderCommand { get; }
-    public RelayCommand ExitCommand { get; }
-    public RelayCommand SelectDllCommand { get; }
-    public RelayCommand RescanDllCommand { get; }
     public RelayCommand SetImagesFolderCommand { get; }
     public RelayCommand AboutCommand { get; }
-    public RelayCommand DismissNoticeCommand { get; }
+    public RelayCommand ExitCommand { get; }
+    public RelayCommand SaveCommand { get; }
+    public RelayCommand SaveAsCommand { get; }
+    public RelayCommand SaveAllCommand { get; }
+    public RelayCommand SelectDllCommand { get; }
+    public RelayCommand RescanDllCommand { get; }
+    public RelayCommand CloseActiveCommand { get; }
+    public RelayCommand<EditorViewModel> CloseTabCommand { get; }
+    public RelayCommand<EditorViewModel> CloseOthersCommand { get; }
+    public RelayCommand CloseAllCommand { get; }
 
-    /// <summary>Asks the window to close (after the usual save prompt).</summary>
-    public event EventHandler? RequestClose;
+    // ---- opening ---------------------------------------------------------------------
 
-    /// <summary>Asks the window to focus the editor for a field once the property panel has rendered.</summary>
-    public event EventHandler<Fields.FieldViewModel>? FocusFieldRequested;
-
-    // ---- file operations -------------------------------------------------------------
-
-    private void NewBlank() => NewBlank(confirm: true);
-
-    private void NewBlank(bool confirm)
-    {
-        if (confirm && !ConfirmDiscardChanges())
-            return;
-        LoadDocument(RibbonDocument.CreateBlank(), Array.Empty<Issue>(), needsRepair: false);
-    }
+    private void NewBlank()
+        => AddEditor(new EditorViewModel(this, RibbonDocument.CreateBlank(), Array.Empty<Issue>(), needsRepair: false));
 
     private void NewFromTemplate()
     {
-        if (!ConfirmDiscardChanges())
-            return;
         try
         {
             var result = TemplateProvider.LoadButtonStructureTemplate();
             result.Document.VersionDate = DateOnly.FromDateTime(DateTime.Today);
-            LoadDocument(result.Document, result.Issues, result.NeedsRepairSave);
+            AddEditor(new EditorViewModel(this, result.Document, result.Issues, result.NeedsRepairSave));
         }
         catch (Exception ex)
         {
@@ -149,134 +109,145 @@ public sealed class MainViewModel : ObservableObject
 
     private void Open()
     {
-        var initial = Document?.FilePath is { } p ? Path.GetDirectoryName(p) : _settings.LastOpenFolder;
+        var initial = ActiveDocument?.Document.FilePath is { } p ? Path.GetDirectoryName(p) : _settings.LastOpenFolder;
         var path = Dialogs.OpenRibbon(initial);
         if (path is not null)
             OpenFile(path);
     }
 
+    /// <summary>Opens a file in a new tab, or activates the tab that already has it.</summary>
     public void OpenFile(string path)
     {
-        if (!ConfirmDiscardChanges())
+        var full = Path.GetFullPath(path);
+        var existing = Documents.FirstOrDefault(d => string.Equals(d.Document.FilePath, full, StringComparison.OrdinalIgnoreCase));
+        if (existing is not null)
+        {
+            ActiveDocument = existing;
             return;
+        }
+
         try
         {
-            var result = RibbonXmlReader.Load(path);
-            LoadDocument(result.Document, result.Issues, result.NeedsRepairSave);
-            RememberFile(path);
+            var result = RibbonXmlReader.Load(full);
+            AddEditor(new EditorViewModel(this, result.Document, result.Issues, result.NeedsRepairSave));
+            RememberFile(full);
         }
         catch (Exception ex)
         {
-            Dialogs.Error($"Could not open\n{path}\n\n{ex.Message}");
-            _settings.RecentFiles.Remove(path);
+            Dialogs.Error($"Could not open\n{full}\n\n{ex.Message}");
+            _settings.RecentFiles.RemoveAll(p => string.Equals(p, full, StringComparison.OrdinalIgnoreCase));
             _settings.Save();
             RefreshRecent();
         }
     }
 
-    private void LoadDocument(RibbonDocument model, IEnumerable<Issue> loadIssues, bool needsRepair)
+    private void AddEditor(EditorViewModel editor)
     {
-        _noticeDismissed = false;
-        _loadIssues.Clear();
-        _loadIssues.AddRange(loadIssues);
-
-        Document = new DocumentViewModel(model, this);
-        if (needsRepair)
-            Document.IsDirty = true;
-
-        Document.Root.IsSelected = true;
-        SelectedNode = Document.Root;
-
-        AutoDetectDll();
-        Revalidate();
+        editor.PropertyChanged += OnEditorPropertyChanged;
+        Documents.Add(editor);
+        ActiveDocument = editor;
     }
 
-    public bool Save()
+    // ---- closing ---------------------------------------------------------------------
+
+    /// <summary>Closes one tab (prompting to save when dirty). Returns false when the user cancels.</summary>
+    public bool CloseTab(EditorViewModel tab)
     {
-        if (Document is null)
-            return false;
-        return Document.FilePath is null ? SaveAs() : SaveTo(Document.FilePath);
-    }
+        if (!Documents.Contains(tab))
+            return true;
 
-    public bool SaveAs()
-    {
-        if (Document is null)
-            return false;
-        var initial = Document.FilePath is { } p ? Path.GetDirectoryName(p) : _settings.LastOpenFolder;
-        var path = Dialogs.SaveRibbon(initial, Document.DisplayName);
-        return path is not null && SaveTo(path);
-    }
-
-    private bool SaveTo(string path)
-    {
-        if (Document is null)
-            return false;
-
-        Revalidate();
-        int errors = ErrorCount;
-        if (errors > 0 && !Dialogs.Confirm(
-                $"This file has {errors} error(s). Revit will most likely fail to load the tab, or load it incompletely.\n\nSave anyway?"))
-            return false;
-
-        foreach (var issue in RibbonValidator.CheckSaveTarget(path))
+        if (tab.Document.IsDirty)
         {
-            if (!Dialogs.Confirm(issue.Message + "\n\nSave anyway?"))
+            ActiveDocument = tab; // show what we are asking about
+            if (!tab.ConfirmDiscardChanges())
                 return false;
         }
 
-        try
+        if (ReferenceEquals(ActiveDocument, tab))
         {
-            BackupService.BackupIfExists(path);
-            RibbonXmlWriter.Save(Document.Model, path);
-            Document.IsDirty = false;
-            Document.NotifyPathChanged();
-            _loadIssues.Clear(); // load-time repairs are now written
-            RememberFile(path);
-            NotifyHeaderProperties();
-            Revalidate();
-            return true;
+            // Pick the neighbour BEFORE removing: otherwise the TabControl auto-selects and fights this choice.
+            int i = Documents.IndexOf(tab);
+            ActiveDocument = Documents.Count == 1 ? null : Documents[i > 0 ? i - 1 : 1];
         }
-        catch (Exception ex)
+
+        tab.PropertyChanged -= OnEditorPropertyChanged;
+        Documents.Remove(tab);
+        tab.Detach();
+        return true;
+    }
+
+    public void CloseOthers(EditorViewModel keep)
+    {
+        foreach (var d in Documents.Where(d => !ReferenceEquals(d, keep)).ToList())
         {
-            Dialogs.Error($"Could not save\n{path}\n\n{ex.Message}");
-            return false;
+            if (!CloseTab(d))
+                return;
         }
     }
 
-    /// <summary>Unloads the open file after the usual save prompt, leaving the editor empty.</summary>
-    private void CloseDocument()
+    /// <summary>Closes every tab; returns false when the user cancels on a dirty one.</summary>
+    public bool CloseAll()
     {
-        if (!ConfirmDiscardChanges())
-            return;
-        _loadIssues.Clear();
-        _noticeDismissed = false;
-        Document = null;      // unwires events and refreshes header/commands
-        SelectedNode = null;
-        Revalidate();         // clears the issue list and stops the debounce timer
-    }
-
-    /// <summary>Returns false when the user cancels. Offers to save unsaved changes first.</summary>
-    public bool ConfirmDiscardChanges()
-    {
-        if (Document?.IsDirty != true)
-            return true;
-        return Dialogs.YesNoCancel($"Save changes to {Document.DisplayName}?") switch
+        foreach (var d in Documents.ToList())
         {
-            MessageBoxResult.Yes => Save(),
-            MessageBoxResult.No => true,
-            _ => false,
-        };
+            if (!CloseTab(d))
+                return false;
+        }
+        return true;
     }
 
-    public bool CanClose() => ConfirmDiscardChanges();
+    /// <summary>Window-close check: prompts for every dirty tab; false when the user cancels.</summary>
+    public bool CanClose()
+    {
+        foreach (var d in Documents.ToList())
+        {
+            if (!d.Document.IsDirty)
+                continue;
+            ActiveDocument = d;
+            if (!d.ConfirmDiscardChanges())
+                return false;
+        }
+        return true;
+    }
 
-    private void RememberFile(string path)
+    // ---- saving ----------------------------------------------------------------------
+
+    public void SaveAll()
+    {
+        foreach (var d in Documents.ToList())
+        {
+            if (!d.Document.IsDirty)
+                continue;
+            ActiveDocument = d;
+            if (!d.Save())
+                return;
+        }
+    }
+
+    // ---- shared services used by editors ----------------------------------------------
+
+    internal void RememberFile(string path)
     {
         _settings.AddRecent(path);
         _settings.LastOpenFolder = Path.GetDirectoryName(path);
         _settings.Save();
         RefreshRecent();
     }
+
+    internal bool IsOpenElsewhere(string path, EditorViewModel except)
+    {
+        var full = Path.GetFullPath(path);
+        return Documents.Any(d => !ReferenceEquals(d, except)
+                                  && string.Equals(d.Document.FilePath, full, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public void RevalidateAll()
+    {
+        foreach (var d in Documents)
+            d.Revalidate();
+    }
+
+    // ---- misc commands ---------------------------------------------------------------
 
     private void RefreshRecent()
     {
@@ -306,7 +277,7 @@ public sealed class MainViewModel : ObservableObject
         _settings.ImagesFolder = picked;
         _settings.Save();
         OnPropertyChanged(nameof(ImagesFolder));
-        Revalidate();
+        RevalidateAll();
     }
 
     private void About()
@@ -320,153 +291,31 @@ public sealed class MainViewModel : ObservableObject
             $"Backups: {BackupService.BackupRoot}\nSettings: {AppSettings.SettingsPath}");
     }
 
-    // ---- tab DLL / command classes ---------------------------------------------------
+    // ---- plumbing --------------------------------------------------------------------
 
-    private void SelectDll()
+    private void OnDocumentsChanged(object? sender, NotifyCollectionChangedEventArgs e)
     {
-        if (Document is null)
-            return;
-        var initial = Document.DllPath is { } d ? Path.GetDirectoryName(d)
-                    : Document.FilePath is { } p ? Path.GetDirectoryName(p) : null;
-        var picked = Dialogs.OpenDll(initial);
-        if (picked is null)
-            return;
-        SetDll(picked, remember: true);
+        OnPropertyChanged(nameof(HasDocuments));
+        SaveAllCommand.RaiseCanExecuteChanged();
+        CloseAllCommand.RaiseCanExecuteChanged();
     }
 
-    private void RescanDll()
+    private void OnEditorPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (Document?.DllPath is { } path)
-            SetDll(path, remember: false);
+        if (!ReferenceEquals(sender, ActiveDocument))
+            return;
+        if (e.PropertyName is nameof(EditorViewModel.Header))
+            OnPropertyChanged(nameof(Title));
+        if (e.PropertyName is nameof(EditorViewModel.HasDll) or nameof(EditorViewModel.DllStatusText))
+            RescanDllCommand.RaiseCanExecuteChanged();
     }
 
-    private void AutoDetectDll()
+    private void RaiseActiveCommands()
     {
-        if (Document?.FilePath is not { } ribbon)
-            return;
-
-        var candidates = new List<string>();
-        var sameName = Path.ChangeExtension(ribbon, ".dll");
-        if (File.Exists(sameName))
-            candidates.Add(sameName);
-
-        var dir = Path.GetDirectoryName(ribbon);
-        if (dir is not null && Directory.Exists(dir))
-        {
-            var tabDlls = Directory.GetFiles(dir, "*_Tab.dll");
-            if (tabDlls.Length == 1)
-                candidates.Add(tabDlls[0]);
-        }
-
-        if (_settings.DllByRibbon.TryGetValue(ribbon, out var remembered) && File.Exists(remembered))
-            candidates.Add(remembered);
-
-        var pick = candidates.FirstOrDefault();
-        if (pick is not null)
-            SetDll(pick, remember: false);
-    }
-
-    private void SetDll(string dllPath, bool remember)
-    {
-        if (Document is null)
-            return;
-
-        Document.DllPath = dllPath;
-        Document.ScannedClasses.Clear();
-        var result = CommandClassScanner.Scan(dllPath);
-        foreach (var c in result.ClassNames)
-            Document.ScannedClasses.Add(c);
-        Document.NotifyClassesChanged();
-        OnPropertyChanged(nameof(DllStatusText));
+        SaveCommand.RaiseCanExecuteChanged();
+        SaveAsCommand.RaiseCanExecuteChanged();
+        SelectDllCommand.RaiseCanExecuteChanged();
         RescanDllCommand.RaiseCanExecuteChanged();
-
-        if (result.Error is not null)
-            Dialogs.Error($"Could not read command classes from\n{dllPath}\n\n{result.Error}");
-
-        if (remember && Document.FilePath is { } ribbon)
-        {
-            _settings.DllByRibbon[ribbon] = dllPath;
-            _settings.Save();
-        }
-        Revalidate();
-    }
-
-    // ---- validation ------------------------------------------------------------------
-
-    private void OnDocumentChanged(object? sender, EventArgs e)
-    {
-        NotifyHeaderProperties();
-        _revalidateTimer.Stop();
-        _revalidateTimer.Start();
-    }
-
-    private void OnDocumentPropertyChanged(object? sender, PropertyChangedEventArgs e)
-    {
-        if (e.PropertyName is nameof(DocumentViewModel.IsDirty) or nameof(DocumentViewModel.DisplayName))
-            NotifyHeaderProperties();
-        if (e.PropertyName is nameof(DocumentViewModel.DllStatusText))
-            OnPropertyChanged(nameof(DllStatusText));
-    }
-
-    private void OnNodeSelected(object? sender, NodeViewModel node)
-    {
-        SelectedNode = node;
-        node.RevealInPreview();
-    }
-
-    public void Revalidate()
-    {
-        _revalidateTimer.Stop();
-        Issues.Clear();
-        if (Document is null)
-        {
-            NotifyIssueCounts();
-            return;
-        }
-
-        var context = new ValidationContext(
-            KnownClasses: Document.ScannedClasses.Count > 0 ? new HashSet<string>(Document.ScannedClasses, StringComparer.Ordinal) : null,
-            DllName: Document.DllPath is { } d ? Path.GetFileName(d) : null,
-            ImagesFolder: ImagesFolder);
-
-        var all = _loadIssues.Concat(RibbonValidator.Validate(Document.Model, context)).ToList();
-
-        var byNode = all.Where(i => i.Node is not null).ToLookup(i => i.Node!);
-        Document.Root.ApplyIssues(byNode);
-
-        var vmByNode = Document.Root.DescendantsAndSelf().ToDictionary(v => v.Node);
-        foreach (var issue in all.OrderByDescending(i => i.IsError))
-        {
-            NodeViewModel? node = issue.Node is not null && vmByNode.TryGetValue(issue.Node, out var v) ? v : null;
-            Issues.Add(new IssueViewModel(issue, node));
-        }
-        NotifyIssueCounts();
-    }
-
-    public void NavigateTo(IssueViewModel issue)
-    {
-        if (issue.Node is null)
-            return;
-        issue.Node.ExpandAncestors();
-        issue.Node.IsSelected = true;
-        SelectedNode = issue.Node;
-        if (issue.AttributeName is { } attr && issue.Node.GetField(attr) is { } field)
-            FocusFieldRequested?.Invoke(this, field);
-    }
-
-    private void NotifyIssueCounts()
-    {
-        OnPropertyChanged(nameof(ErrorCount));
-        OnPropertyChanged(nameof(WarningCount));
-        OnPropertyChanged(nameof(IssueSummary));
-    }
-
-    private void NotifyHeaderProperties()
-    {
-        OnPropertyChanged(nameof(Title));
-        OnPropertyChanged(nameof(StatusPath));
-        OnPropertyChanged(nameof(IsDeployedCopy));
-        OnPropertyChanged(nameof(ShowDeployedNotice));
-        OnPropertyChanged(nameof(DllStatusText));
+        CloseActiveCommand.RaiseCanExecuteChanged();
     }
 }

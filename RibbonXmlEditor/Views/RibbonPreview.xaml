@@ -141,15 +141,15 @@
 
         <!-- Push button / toggle button: large (icon over caption) or small (icon beside caption). -->
         <DataTemplate x:Key="Preview.Button">
-            <Button Style="{StaticResource FlatButton}" Command="{Binding SelectCommand}" Margin="1">
+            <Button x:Name="Root" Style="{StaticResource FlatButton}" Command="{Binding SelectCommand}" Margin="1">
                 <Border Style="{StaticResource SelectionRing}">
-                    <Border Style="{StaticResource StatusBorderOwn}" Padding="3,2">
+                    <Border x:Name="Status" Style="{StaticResource StatusBorderOwn}" Padding="3,2">
                         <Grid>
                             <StackPanel x:Name="Large" Orientation="Vertical" MinWidth="44" MaxWidth="110" HorizontalAlignment="Center">
                                 <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Icon.Large}" HorizontalAlignment="Center" Focusable="False" />
                                 <TextBlock Text="{Binding Caption}" Style="{StaticResource CaptionText}" TextAlignment="Center" TextWrapping="Wrap" Margin="0,2,0,0" />
                             </StackPanel>
-                            <StackPanel x:Name="Small" Orientation="Horizontal" Height="22">
+                            <StackPanel x:Name="Small" Orientation="Horizontal" Height="20">
                                 <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Icon.Small}" VerticalAlignment="Center" Focusable="False" />
                                 <TextBlock Text="{Binding CaptionSingleLine}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="4,0,2,0" />
                             </StackPanel>
@@ -161,8 +161,11 @@
                 <DataTrigger Binding="{Binding IsLargeInPreview}" Value="True">
                     <Setter TargetName="Small" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
+                <!-- Small rows: 20 + ring 4 + border 2 + padding 2 = 28 px, so three stacked rows fit in 84 px. -->
                 <DataTrigger Binding="{Binding IsLargeInPreview}" Value="False">
                     <Setter TargetName="Large" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Status" Property="Padding" Value="3,1" />
+                    <Setter TargetName="Root" Property="Margin" Value="1,0" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -172,7 +175,7 @@
             <Grid>
                 <Button x:Name="Root" Style="{StaticResource FlatButton}" Command="{Binding SelectCommand}" Margin="1">
                     <Border Style="{StaticResource SelectionRing}">
-                        <Border Style="{StaticResource StatusBorder}" Padding="3,2">
+                        <Border x:Name="Status" Style="{StaticResource StatusBorder}" Padding="3,2">
                             <Grid>
                                 <StackPanel x:Name="Large" Orientation="Vertical" MinWidth="44" MaxWidth="110" HorizontalAlignment="Center">
                                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Icon.Large}" HorizontalAlignment="Center" Focusable="False" />
@@ -181,7 +184,7 @@
                                                   IsChecked="{Binding IsPreviewExpanded, Mode=TwoWay}"
                                                   IsHitTestVisible="{Binding IsOpen, ElementName=List, Converter={StaticResource InverseBool}}" />
                                 </StackPanel>
-                                <StackPanel x:Name="Small" Orientation="Horizontal" Height="22">
+                                <StackPanel x:Name="Small" Orientation="Horizontal" Height="20">
                                     <ContentControl Content="{Binding}" ContentTemplate="{StaticResource Icon.Small}" VerticalAlignment="Center" Focusable="False" />
                                     <TextBlock Text="{Binding CaptionSingleLine}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="4,0,2,0" />
                                     <ToggleButton Style="{StaticResource ArrowToggle}" Content="▾" Width="14"
@@ -208,6 +211,8 @@
                 </DataTrigger>
                 <DataTrigger Binding="{Binding IsLargeInPreview}" Value="False">
                     <Setter TargetName="Large" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Status" Property="Padding" Value="3,1" />
+                    <Setter TargetName="Root" Property="Margin" Value="1,0" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
@@ -325,7 +330,7 @@
         <DataTemplate x:Key="Preview.StackedItems">
             <Button Style="{StaticResource FlatButton}" Command="{Binding SelectCommand}" VerticalAlignment="Center">
                 <Border Style="{StaticResource SelectionRing}">
-                    <Border Style="{StaticResource StatusBorderOwn}" Padding="2" Height="76">
+                    <Border Style="{StaticResource StatusBorderOwn}" Padding="2" MinHeight="76">
                         <ItemsControl ItemsSource="{Binding Children}" ItemTemplateSelector="{StaticResource Selector}" Focusable="False" VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>
                                 <ItemsPanelTemplate>
@@ -426,8 +431,7 @@
     <Grid Background="#FAFAFA">
         <ScrollViewer x:Name="Scroller" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto"
                       Focusable="False" Padding="6" PreviewMouseWheel="Scroller_PreviewMouseWheel">
-            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" DataContext="{Binding Document}"
-                        Visibility="{Binding DataContext.Document, RelativeSource={RelativeSource AncestorType=UserControl}, Converter={StaticResource NullToVis}}">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" DataContext="{Binding Document}">
                 <!-- Tab chip -->
                 <Button Style="{StaticResource FlatButton}" DataContext="{Binding Root}" Command="{Binding SelectCommand}" HorizontalAlignment="Left">
                     <Border Style="{StaticResource SelectionRing}">
@@ -448,19 +452,6 @@
                 </Border>
             </StackPanel>
         </ScrollViewer>
-
-        <TextBlock Margin="14" Foreground="#808080" Text="No file open. Use File > New or File > Open.">
-            <TextBlock.Style>
-                <Style TargetType="TextBlock">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                    <Style.Triggers>
-                        <DataTrigger Binding="{Binding Document}" Value="{x:Null}">
-                            <Setter Property="Visibility" Value="Visible" />
-                        </DataTrigger>
-                    </Style.Triggers>
-                </Style>
-            </TextBlock.Style>
-        </TextBlock>
 
         <TextBlock Margin="14,44,14,14" Foreground="#808080" Text="This tab has no panels yet. Select the tab and click Add panel.">
             <TextBlock.Style>

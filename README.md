@@ -29,7 +29,11 @@ with it before you save.
 
 ## Using the editor
 
-1. **File → Open** a `.ribbon` (or drag it onto the window, or use *Open with* on the file).
+1. **File → Open** a `.ribbon` (or drag files onto the window, or use *Open with* on the file).
+   Each file opens in its own **tab** with its own tree, property panel, issues and preview, so several
+   ribbons can be edited side by side. Opening a file that is already open switches to its tab.
+   Close a tab with its ✕, a middle-click, `Ctrl+W` (**File → Close Loaded Ribbon**), or right-click
+   the tab for *Close Others* / *Close All*. **File → Save All** saves every tab with changes.
 2. The **tree** on the left shows Tab → Panel → structure (Stacked items, Split button, Slide-out,
    Radio group, Separator) → items (Button, Pulldown, Combo box, Text box, …).
    Right-click for **Add / Duplicate / Move Up / Move Down / Delete** (`Del`, `Alt+↑/↓`, `Ctrl+D`).
@@ -52,7 +56,7 @@ with it before you save.
    tree; the tree selection is outlined in blue. Red and orange outlines follow the validator, and a
    coloured glyph stands in for an empty or missing image.
 6. **Save** (`Ctrl+S`) backs the previous file up, then writes atomically (temp file + rename).
-   **File → Close** (`Ctrl+W`) unloads the file and leaves the editor empty.
+   Closing the window prompts once for each tab with unsaved changes.
 
 The first save of a hand-written production file re-indents it (one attribute per line, two-space
 indent). Content is unchanged; the round-trip test proves it.

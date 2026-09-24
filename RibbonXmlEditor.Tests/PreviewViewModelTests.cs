@@ -7,7 +7,7 @@ using static RibbonXmlEditor.Tests.ViewModelTests;
 
 namespace RibbonXmlEditor.Tests;
 
-/// <summary>Headless checks for the ribbon-preview state on NodeViewModel and the Close command.</summary>
+/// <summary>Headless checks for the ribbon-preview state on NodeViewModel and closing the last tab.</summary>
 public class PreviewViewModelTests
 {
     private static List<string> Record(INotifyPropertyChanged source)
@@ -18,37 +18,35 @@ public class PreviewViewModelTests
     }
 
     [Fact]
-    public void CloseCommand_ClearsState_AndNewWorksAfterwards()
+    public void CloseTab_LastTab_EmptiesShell_AndNewWorksAfterwards()
     {
         Sta(() =>
         {
-            var (main, _) = Blank();
-            Assert.True(main.CloseCommand.CanExecute(null));
+            var (main, editor, _) = Blank();
+            Assert.True(main.CloseActiveCommand.CanExecute(null));
 
-            main.CloseCommand.Execute(null); // not dirty -> no prompt
+            editor.CloseCommand.Execute(null); // not dirty -> no prompt
 
-            Assert.Null(main.Document);
-            Assert.Null(main.SelectedNode);
-            Assert.Empty(main.Issues);
-            Assert.Equal("No issues", main.IssueSummary);
+            Assert.Null(main.ActiveDocument);
+            Assert.Empty(main.Documents);
+            Assert.False(main.HasDocuments);
             Assert.Equal("Ribbon XML Editor", main.Title);
-            Assert.Equal("No file open", main.StatusPath);
-            Assert.False(main.IsDeployedCopy);
-            Assert.False(main.CloseCommand.CanExecute(null));
+            Assert.False(main.CloseActiveCommand.CanExecute(null));
             Assert.False(main.SaveCommand.CanExecute(null));
+            Assert.False(main.SaveAllCommand.CanExecute(null));
 
             main.NewCommand.Execute(null);
-            Assert.NotNull(main.Document);
-            Assert.Same(main.Document!.Root, main.SelectedNode);
+            Assert.NotNull(main.ActiveDocument);
+            Assert.Same(main.ActiveDocument!.Document.Root, main.ActiveDocument.SelectedNode);
         });
     }
 
     [Fact]
-    public void SelectCommand_SelectsExpandsAncestors_AndUpdatesMainSelection()
+    public void SelectCommand_SelectsExpandsAncestors_AndUpdatesEditorSelection()
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (_, editor, doc) = Blank();
             var panel = doc.Root.Children[0];
             var stack = panel.Children[0];
             var button = stack.Children[0];
@@ -58,7 +56,7 @@ public class PreviewViewModelTests
             button.SelectCommand.Execute(null);
 
             Assert.True(button.IsSelected);
-            Assert.Same(button, main.SelectedNode);
+            Assert.Same(button, editor.SelectedNode);
             Assert.True(panel.IsExpanded);
             Assert.True(stack.IsExpanded);
         });
@@ -69,7 +67,7 @@ public class PreviewViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var stack = doc.Root.Children[0].Children[0];
             var pulldown = stack.AddChild(ElementKind.PulldownButtons);
             var child = pulldown.AddChild(ElementKind.Button);
@@ -90,7 +88,7 @@ public class PreviewViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var panel = doc.Root.Children[0];
             var stack = panel.Children[0];
             var first = stack.Children[0];
@@ -125,7 +123,7 @@ public class PreviewViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var stack = doc.Root.Children[0].Children[0];
             var button = stack.Children[0];
 
@@ -183,7 +181,7 @@ public class PreviewViewModelTests
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (_, editor, doc) = Blank();
             var panel = doc.Root.Children[0];
             var slideout = panel.AddChild(ElementKind.SlideoutPanel);
             var button = slideout.AddChild(ElementKind.Button);
@@ -193,7 +191,7 @@ public class PreviewViewModelTests
 
             button.IsSelected = true;   // as the tree would do
 
-            Assert.Same(button, main.SelectedNode);
+            Assert.Same(button, editor.SelectedNode);
             Assert.True(slideout.IsPreviewExpanded);
 
             doc.ClosePreviewPopups();   // only drop lists close, not slide-outs

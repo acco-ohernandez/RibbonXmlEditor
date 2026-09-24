@@ -22,7 +22,7 @@ public partial class RibbonPreview : UserControl
     /// <summary>Popups are separate windows; close them when the preview tab is hidden.</summary>
     private void OnIsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
-        if (e.NewValue is false && DataContext is MainViewModel { Document: { } doc })
+        if (e.NewValue is false && DataContext is EditorViewModel { Document: { } doc })
             doc.ClosePreviewPopups();
     }
 }

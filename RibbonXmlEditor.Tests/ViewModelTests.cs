@@ -25,10 +25,13 @@ public class ViewModelTests
             throw new Xunit.Sdk.XunitException($"Failed on STA thread: {error}");
     }
 
-    internal static (MainViewModel main, DocumentViewModel doc) Blank()
+    /// <summary>A shell with one blank document tab open.</summary>
+    internal static (MainViewModel main, EditorViewModel editor, DocumentViewModel doc) Blank()
     {
         var main = new MainViewModel();
-        return (main, main.Document!);
+        main.NewCommand.Execute(null);
+        var editor = main.ActiveDocument!;
+        return (main, editor, editor.Document);
     }
 
     [Fact]
@@ -36,12 +39,13 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (main, editor, doc) = Blank();
             Assert.False(doc.IsDirty);
-            Assert.Same(doc.Root, main.SelectedNode);
+            Assert.Same(doc.Root, editor.SelectedNode);
             Assert.Equal(ElementKind.Tab, doc.Root.Node.Kind);
+            Assert.Single(main.Documents);
             // The starter button has no command class yet, so exactly one required-field error is expected.
-            var only = Assert.Single(main.Issues);
+            var only = Assert.Single(editor.Issues);
             Assert.Equal("required", only.Issue.RuleId);
             Assert.Equal("classname", only.AttributeName);
         });
@@ -52,7 +56,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (_, editor, doc) = Blank();
             var stack = doc.Root.Children[0].Children[0]; // tab / panel / stackeditems (1 button)
             Assert.Equal(ElementKind.StackedItems, stack.Node.Kind);
             var addButton = stack.AddChildOptions.Single(o => o.Kind == ElementKind.Button);
@@ -63,7 +67,7 @@ public class ViewModelTests
 
             Assert.Equal(3, stack.Node.Children.Count);
             Assert.Equal(3, stack.Children.Count);
-            Assert.Same(b3, main.SelectedNode);
+            Assert.Same(b3, editor.SelectedNode);
             Assert.True(doc.IsDirty);
             Assert.False(addButton.IsEnabled);           // 3 = max for stacked items
             Assert.False(addButton.Command.CanExecute(null));
@@ -76,7 +80,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var panel = doc.Root.Children[0];
             var stack = panel.Children[0];
             var button = stack.Children[0];
@@ -96,7 +100,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var panel = doc.Root.Children[0];
             var second = panel.AddChild(ElementKind.Separator);
             Assert.Equal(1, second.Node.IndexInParent);
@@ -116,7 +120,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (_, editor, doc) = Blank();
             var panel = doc.Root.Children[0];
             var sep = panel.AddChild(ElementKind.Separator);
             Assert.Equal(2, panel.Children.Count);
@@ -125,7 +129,7 @@ public class ViewModelTests
 
             Assert.Single(panel.Children);
             Assert.Single(panel.Node.Children);
-            Assert.Same(panel.Children[0], main.SelectedNode);
+            Assert.Same(panel.Children[0], editor.SelectedNode);
             Assert.False(doc.Root.DeleteCommand.CanExecute(null)); // the tab cannot be deleted
         });
     }
@@ -135,7 +139,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var button = doc.Root.Children[0].Children[0].Children[0];
             var text = (MultilineTextField)button.GetField("text")!;
 
@@ -152,7 +156,7 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (_, doc) = Blank();
+            var (_, _, doc) = Blank();
             var stack = doc.Root.Children[0].Children[0];
             var textbox = stack.AddChild(ElementKind.TextBox);
             var flag = (TrueOrEmptyField)textbox.GetField("showimage")!;
@@ -169,14 +173,14 @@ public class ViewModelTests
     {
         Sta(() =>
         {
-            var (main, doc) = Blank();
+            var (_, editor, doc) = Blank();
             var button = doc.Root.Children[0].Children[0].Children[0];
             button.GetField("classname")!.Value = "";                 // required -> error on field
             button.GetField("contexthelp")!.Value = "not a url";      // error on field
 
-            main.Revalidate();
+            editor.Revalidate();
 
-            Assert.Equal(2, main.ErrorCount);
+            Assert.Equal(2, editor.ErrorCount);
             Assert.True(button.GetField("classname")!.HasError);
             Assert.True(button.GetField("contexthelp")!.HasError);
             Assert.False(button.GetField("name")!.HasIssues);
@@ -184,19 +188,19 @@ public class ViewModelTests
             Assert.True(button.HasOwnError);
             Assert.True(doc.Root.HasError);     // rolled up to the tab
             Assert.False(doc.Root.HasOwnError); // but the tab itself is fine
-            Assert.All(main.Issues, i => Assert.Same(button, i.Node));
-            Assert.Contains("@ classname", main.Issues.First(i => i.AttributeName == "classname").Location);
+            Assert.All(editor.Issues, i => Assert.Same(button, i.Node));
+            Assert.Contains("@ classname", editor.Issues.First(i => i.AttributeName == "classname").Location);
 
             button.GetField("classname")!.Value = "Ns.Cmd_X";
             button.GetField("contexthelp")!.Value = "";
-            main.Revalidate();
-            Assert.Empty(main.Issues);
+            editor.Revalidate();
+            Assert.Empty(editor.Issues);
             Assert.False(doc.Root.HasError);
         });
     }
 
     [Fact]
-    public void OpenFile_LoadsTree_AndReportsLoadRepairs()
+    public void OpenFile_LoadsTree_InNewTab_AndReportsLoadRepairs()
     {
         Sta(() =>
         {
@@ -208,16 +212,21 @@ public class ViewModelTests
                 File.WriteAllText(path,
                     "<tab name=\"T\"><panel name=\"P\"><stackeditems><button name=\"b\" classname=\"N.C\" text=\"t\"/></stackeditems></panel></tab>");
 
-                var (main, _) = Blank();
+                var (main, blank, _) = Blank();
                 main.OpenFile(path);
 
-                var doc = main.Document!;
+                Assert.Equal(2, main.Documents.Count);
+                var editor = main.ActiveDocument!;
+                Assert.NotSame(blank, editor);
+                var doc = editor.Document;
                 Assert.Equal(path, doc.FilePath);
                 Assert.True(doc.IsDirty);                       // missing attributes must be written back
                 Assert.Equal("Tab: T", doc.Root.Header);
-                Assert.Contains(main.Issues, i => i.Issue.RuleId == "load.missing-attribute");
-                Assert.Equal(0, main.ErrorCount);               // repairs are warnings; the doc itself is valid
-                Assert.False(main.IsDeployedCopy);
+                Assert.Equal("T.ribbon*", editor.Header);
+                Assert.Contains(editor.Issues, i => i.Issue.RuleId == "load.missing-attribute");
+                Assert.Equal(0, editor.ErrorCount);             // repairs are warnings; the doc itself is valid
+                Assert.False(editor.IsDeployedCopy);
+                Assert.Equal("T.ribbon* - Ribbon XML Editor", main.Title);
             }
             finally
             {

@@ -22,9 +22,8 @@ public partial class App : Application
         MainWindow = window;
         window.Show();
 
-        // "Open with" / drag onto the exe.
-        var file = e.Args.FirstOrDefault(File.Exists);
-        if (file is not null)
+        // "Open with" / drag onto the exe: every existing path becomes a tab.
+        foreach (var file in e.Args.Where(File.Exists))
             vm.OpenFile(file);
     }
 }

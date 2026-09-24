@@ -9,17 +9,17 @@ public sealed class DocumentViewModel : ObservableObject
     private bool _isDirty;
     private string? _dllPath;
 
-    public DocumentViewModel(RibbonDocument model, MainViewModel main)
+    public DocumentViewModel(RibbonDocument model, EditorViewModel editor)
     {
         Model = model;
-        Main = main;
+        Editor = editor;
         Root = new NodeViewModel(model.Tab, this, null);
         RootItems = new ObservableCollection<NodeViewModel> { Root };
         SetTodayCommand = new RelayCommand(() => VersionDate = DateTime.Today);
     }
 
     public RibbonDocument Model { get; }
-    public MainViewModel Main { get; }
+    public EditorViewModel Editor { get; }
     public NodeViewModel Root { get; }
     public ObservableCollection<NodeViewModel> RootItems { get; }
 
@@ -107,7 +107,7 @@ public sealed class DocumentViewModel : ObservableObject
 
     public void NotifyClassesChanged() => OnPropertyChanged(nameof(DllStatusText));
 
-    public RelayCommand SelectDllCommand => Main.SelectDllCommand;
+    public RelayCommand SelectDllCommand => Editor.SelectDllCommand;
 
     // ---- ribbon preview --------------------------------------------------------------
 

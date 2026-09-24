@@ -1,0 +1,218 @@
+<UserControl x:Class="RibbonXmlEditor.Views.DocumentView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:RibbonXmlEditor.ViewModels"
+             xmlns:v="clr-namespace:RibbonXmlEditor.Views"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DataContext="{d:DesignInstance Type=vm:EditorViewModel}"
+             Focusable="False">
+
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+        <v:NullToVisibilityConverter x:Key="NullToVis" />
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Foreground" Value="#404040" />
+            <Setter Property="Margin" Value="0,14,0,4" />
+        </Style>
+
+        <!-- Property panel for the selected node -->
+        <DataTemplate x:Key="NodeEditorTemplate" DataType="{x:Type vm:NodeViewModel}">
+            <StackPanel Margin="14,10,14,14">
+                <StackPanel Orientation="Horizontal">
+                    <Border Width="40" Height="24" CornerRadius="4" Background="{Binding GlyphBrush}" Margin="0,0,8,0">
+                        <TextBlock Text="{Binding Glyph}" Foreground="White" FontSize="12" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                    <TextBlock Text="{Binding KindName}" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock Text="{Binding Description}" TextWrapping="Wrap" Foreground="#606060" Margin="0,6,0,0" />
+
+                <!-- Document header: only on the tab node -->
+                <Border Visibility="{Binding IsTab, Converter={StaticResource BoolToVis}}"
+                        Background="#F5F7FA" BorderBrush="#D8DEE6" BorderThickness="1" CornerRadius="4" Padding="10,4,10,10" Margin="0,12,0,0">
+                    <StackPanel DataContext="{Binding Doc}">
+                        <TextBlock Text="File header" Style="{StaticResource SectionTitle}" Margin="0,4,0,4" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="140" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="Version" VerticalAlignment="Center" Margin="0,0,8,0" />
+                            <TextBox Grid.Column="1" Text="{Binding Version, UpdateSourceTrigger=PropertyChanged}" Padding="3"
+                                     ToolTip="Written as the Version comment at the top of the file, e.g. 2.2.0" />
+                            <TextBlock Grid.Column="2" Text="Date" VerticalAlignment="Center" Margin="16,0,8,0" />
+                            <DatePicker Grid.Column="3" SelectedDate="{Binding VersionDate}" Width="140" />
+                            <Button Grid.Column="4" Content="Today" Padding="8,2" Margin="6,0,0,0" Command="{Binding SetTodayCommand}" />
+                        </Grid>
+                        <TextBlock Text="Written as: &lt;!-- Version x.y.z yyyy-mm-dd --&gt;" FontSize="11" Foreground="#707070" Margin="0,4,0,0" />
+                        <StackPanel Visibility="{Binding HasOtherComments, Converter={StaticResource BoolToVis}}" Margin="0,8,0,0">
+                            <TextBlock Text="Other comments in the file (kept as-is):" FontSize="11" Foreground="#707070" />
+                            <ItemsControl ItemsSource="{Binding OtherComments}" Margin="8,2,0,0">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontSize="11" FontFamily="Consolas" TextWrapping="Wrap" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <!-- Attribute fields -->
+                <ItemsControl ItemsSource="{Binding Fields}" Focusable="False" Margin="0,2,0,0" />
+
+                <!-- Node-level issues -->
+                <ItemsControl ItemsSource="{Binding NodeIssues}" Focusable="False" Margin="0,10,0,0">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border BorderThickness="1" CornerRadius="3" Padding="8,5" Margin="0,0,0,4">
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Background" Value="#FFF8E1" />
+                                        <Setter Property="BorderBrush" Value="#F9A825" />
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsError}" Value="True">
+                                                <Setter Property="Background" Value="#FDECEA" />
+                                                <Setter Property="BorderBrush" Value="#D32F2F" />
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <TextBlock Text="{Binding Message}" TextWrapping="Wrap" />
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <!-- Add-child buttons -->
+                <StackPanel Visibility="{Binding CanAddChildren, Converter={StaticResource BoolToVis}}">
+                    <TextBlock Text="Items" Style="{StaticResource SectionTitle}" />
+                    <ItemsControl ItemsSource="{Binding AddChildOptions}" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Content="{Binding ButtonText}" Command="{Binding Command}" Padding="10,4" Margin="0,0,6,6" />
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="Right-click an item in the tree to duplicate, move or delete it." FontSize="11" Foreground="#707070" />
+                </StackPanel>
+            </StackPanel>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <DockPanel>
+        <!-- Deployed-copy notice -->
+        <Border DockPanel.Dock="Top" Background="#FFF4CE" BorderBrush="#E0C060" BorderThickness="0,0,0,1" Padding="10,6"
+                Visibility="{Binding ShowDeployedNotice, Converter={StaticResource BoolToVis}}">
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="Dismiss" Padding="10,2" Command="{Binding DismissNoticeCommand}" VerticalAlignment="Center" />
+                <TextBlock TextWrapping="Wrap" VerticalAlignment="Center">
+                    <Run FontWeight="Bold" Text="You are editing a deployed copy." />
+                    <Run Text="The next add-in deployment (MSI or developer build) will overwrite this file. The source of truth is the .ribbon file in the BTT_ACCORevit-Ribbons repository. Ask the developer to carry your changes into the repo so they persist." />
+                </TextBlock>
+            </DockPanel>
+        </Border>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="5" />
+                <RowDefinition Height="230" MinHeight="60" />
+            </Grid.RowDefinitions>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="360" MinWidth="220" />
+                <ColumnDefinition Width="5" />
+                <ColumnDefinition Width="*" MinWidth="360" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Tree -->
+            <TreeView x:Name="Tree" Grid.Row="0" Grid.Column="0"
+                      ItemsSource="{Binding Document.RootItems}"
+                      ItemContainerStyle="{StaticResource RibbonTreeItemStyle}"
+                      PreviewMouseRightButtonDown="Tree_PreviewMouseRightButtonDown"
+                      BorderThickness="0,0,1,0" Padding="4">
+                <TreeView.InputBindings>
+                    <KeyBinding Key="Delete" Command="{Binding SelectedNode.DeleteCommand}" />
+                    <KeyBinding Key="Up" Modifiers="Alt" Command="{Binding SelectedNode.MoveUpCommand}" />
+                    <KeyBinding Key="Down" Modifiers="Alt" Command="{Binding SelectedNode.MoveDownCommand}" />
+                    <KeyBinding Key="D" Modifiers="Control" Command="{Binding SelectedNode.DuplicateCommand}" />
+                </TreeView.InputBindings>
+            </TreeView>
+
+            <GridSplitter Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" Background="#E0E0E0" />
+
+            <!-- Property panel -->
+            <ScrollViewer Grid.Row="0" Grid.Column="2" VerticalScrollBarVisibility="Auto">
+                <Grid>
+                    <ContentControl Content="{Binding SelectedNode}"
+                                    ContentTemplate="{StaticResource NodeEditorTemplate}" Focusable="False">
+                        <ContentControl.Style>
+                            <!-- A ContentControl still renders its template for null content; hide it instead. -->
+                            <Style TargetType="ContentControl">
+                                <Style.Triggers>
+                                    <Trigger Property="Content" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
+                    <TextBlock Foreground="#808080" Margin="14" Text="Select an item in the tree to edit it.">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding SelectedNode}" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Grid>
+            </ScrollViewer>
+
+            <GridSplitter Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E0E0E0" />
+
+            <!-- Issues / Ribbon preview -->
+            <TabControl Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Padding="0" BorderThickness="0,1,0,0"
+                        SelectedIndex="{Binding BottomTabIndex, Mode=TwoWay}">
+                <TabItem Header="{Binding IssueSummary}" HeaderStringFormat="Issues: {0}">
+                    <ListView x:Name="IssuesList" ItemsSource="{Binding Issues}" BorderThickness="0"
+                              MouseDoubleClick="IssuesList_MouseDoubleClick"
+                              ToolTip="Double-click an issue to jump to it">
+                        <ListView.View>
+                            <GridView>
+                                <GridViewColumn Header="" Width="28">
+                                    <GridViewColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding SeverityGlyph}" ToolTip="{Binding SeverityText}" HorizontalAlignment="Center" />
+                                        </DataTemplate>
+                                    </GridViewColumn.CellTemplate>
+                                </GridViewColumn>
+                                <GridViewColumn Header="Message" Width="720" DisplayMemberBinding="{Binding Message}" />
+                                <GridViewColumn Header="Location" Width="480" DisplayMemberBinding="{Binding Location}" />
+                            </GridView>
+                        </ListView.View>
+                    </ListView>
+                </TabItem>
+                <TabItem Header="Ribbon preview" ToolTip="Schematic view of the ribbon. Click an item to select it.">
+                    <v:RibbonPreview />
+                </TabItem>
+            </TabControl>
+        </Grid>
+    </DockPanel>
+</UserControl>
