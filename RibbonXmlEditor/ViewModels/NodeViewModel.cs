@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using RibbonXmlEditor.Models;
 using RibbonXmlEditor.Schema;
 using RibbonXmlEditor.Services;
@@ -7,13 +8,20 @@ using RibbonXmlEditor.ViewModels.Fields;
 
 namespace RibbonXmlEditor.ViewModels;
 
-/// <summary>Tree node wrapper around a <see cref="RibbonNode"/>: fields, children and structural commands.</summary>
+/// <summary>Tree node wrapper around a <see cref="RibbonNode"/>: fields, children, structural commands and preview state.</summary>
 public sealed class NodeViewModel : ObservableObject
 {
     private bool _isSelected;
     private bool _isExpanded = true;
     private bool _hasError;
     private bool _hasWarning;
+    private bool _hasOwnError;
+    private bool _hasOwnWarning;
+    private bool _isPreviewExpanded;
+    private BitmapSource? _smallImage;
+    private BitmapSource? _largeImage;
+    private bool _smallImageLoaded;
+    private bool _largeImageLoaded;
 
     public NodeViewModel(RibbonNode node, DocumentViewModel doc, NodeViewModel? parent)
     {
@@ -29,6 +37,7 @@ public sealed class NodeViewModel : ObservableObject
         DuplicateCommand = new RelayCommand(Duplicate, () => Parent is not null);
         MoveUpCommand = new RelayCommand(() => Move(-1), () => Parent is not null && Node.IndexInParent > 0);
         MoveDownCommand = new RelayCommand(() => Move(+1), () => Parent is not null && Node.IndexInParent < Parent.Children.Count - 1);
+        SelectCommand = new RelayCommand(SelectFromPreview);
     }
 
     public RibbonNode Node { get; }
@@ -49,10 +58,13 @@ public sealed class NodeViewModel : ObservableObject
     public RelayCommand MoveUpCommand { get; }
     public RelayCommand MoveDownCommand { get; }
 
+    /// <summary>Selects this node from the ribbon preview: expands the tree path and closes the parent's drop list.</summary>
+    public RelayCommand SelectCommand { get; }
+
     /// <summary>Node-level issues (not tied to a single attribute).</summary>
     public ObservableCollection<Issue> NodeIssues { get; } = new();
 
-    // ---- presentation ----------------------------------------------------------------
+    // ---- presentation (tree) ---------------------------------------------------------
 
     public string Header
     {
@@ -135,6 +147,122 @@ public sealed class NodeViewModel : ObservableObject
         private set => SetProperty(ref _hasWarning, value);
     }
 
+    /// <summary>True when this node itself (not a descendant) has an error.</summary>
+    public bool HasOwnError
+    {
+        get => _hasOwnError;
+        private set => SetProperty(ref _hasOwnError, value);
+    }
+
+    /// <summary>True when this node itself has a warning and no own error.</summary>
+    public bool HasOwnWarning
+    {
+        get => _hasOwnWarning;
+        private set => SetProperty(ref _hasOwnWarning, value);
+    }
+
+    // ---- presentation (ribbon preview) -----------------------------------------------
+
+    /// <summary>Text shown in the ribbon preview. Buttons show their caption; containers show their name.</summary>
+    public string Caption
+    {
+        get
+        {
+            var name = Node.Name;
+            switch (Node.Kind)
+            {
+                case ElementKind.Button or ElementKind.ToggleButton or ElementKind.ComboBoxMember:
+                    return FirstNonEmpty(Node["text"], name, "(no caption)");
+                case ElementKind.ComboBox:
+                    return FirstNonEmpty(Node["itemtext"], name, "(combo box)");
+                case ElementKind.TextBox:
+                    return FirstNonEmpty(Node["prompttext"], name, "(text box)");
+                case ElementKind.Separator or ElementKind.StackedItems or ElementKind.SplitButtons:
+                    return Def.DisplayName;
+                default:
+                    return FirstNonEmpty(name, string.Empty, "(unnamed)");
+            }
+        }
+    }
+
+    public string CaptionSingleLine => Caption.Replace('\n', ' ');
+
+    /// <summary>16 px image from the <c>image</c> attribute, or null when empty or missing. Cached until the attribute changes.</summary>
+    public BitmapSource? SmallImage
+    {
+        get
+        {
+            if (!_smallImageLoaded)
+            {
+                _smallImage = ImageCatalog.LoadThumbnail(Node["image"], 16);
+                _smallImageLoaded = true;
+            }
+            return _smallImage;
+        }
+    }
+
+    /// <summary>32 px image: the pulldown's <c>image</c>, otherwise <c>largeimage</c>. Cached until the attribute changes.</summary>
+    public BitmapSource? LargeImage
+    {
+        get
+        {
+            if (!_largeImageLoaded)
+            {
+                var attr = Node.Kind == ElementKind.PulldownButtons ? "image" : "largeimage";
+                _largeImage = ImageCatalog.LoadThumbnail(Node[attr], 32);
+                _largeImageLoaded = true;
+            }
+            return _largeImage;
+        }
+    }
+
+    public bool HasSmallImage => SmallImage is not null;
+    public bool HasLargeImage => LargeImage is not null;
+
+    /// <summary>Large (icon over caption) versus small (icon beside caption) rendering, following Revit's rules.</summary>
+    public bool IsLargeInPreview => Parent?.Node.Kind switch
+    {
+        ElementKind.StackedItems => Parent.Children.Count == 1,
+        ElementKind.SplitButtons or ElementKind.SlideoutPanel or ElementKind.RadioButtons => true,
+        _ => false,
+    };
+
+    /// <summary>The split button's face.</summary>
+    public NodeViewModel? FirstChild => Children.FirstOrDefault();
+
+    /// <summary>A panel's slide-out (Revit merges several into one).</summary>
+    public NodeViewModel? Slideout => Children.FirstOrDefault(c => c.Node.Kind == ElementKind.SlideoutPanel);
+
+    /// <summary>Drop list open (pulldown, split, combo) or slide-out row visible.</summary>
+    public bool IsPreviewExpanded
+    {
+        get => _isPreviewExpanded;
+        set => SetProperty(ref _isPreviewExpanded, value);
+    }
+
+    /// <summary>Makes this node visible in the preview by opening any slide-out that contains it.</summary>
+    public void RevealInPreview()
+    {
+        foreach (var a in Ancestors())
+        {
+            if (a.Node.Kind == ElementKind.SlideoutPanel)
+                a.IsPreviewExpanded = true;
+        }
+    }
+
+    internal void NotifyPreviewLayoutChanged() => OnPropertyChanged(nameof(IsLargeInPreview));
+
+    private void SelectFromPreview()
+    {
+        ExpandAncestors();
+        IsSelected = true;
+        if (Parent?.Node.Kind is ElementKind.PulldownButtons or ElementKind.SplitButtons or ElementKind.ComboBox)
+            Parent.IsPreviewExpanded = false;
+    }
+
+    private static string FirstNonEmpty(string a, string b, string fallback)
+        => a.Length > 0 ? a : b.Length > 0 ? b : fallback;
+
     // ---- validation plumbing ---------------------------------------------------------
 
     /// <summary>Distributes issues to fields and node, then rolls flags up. Returns (hasError, hasWarning) including descendants.</summary>
@@ -150,6 +278,9 @@ public sealed class NodeViewModel : ObservableObject
 
         bool error = mine.Any(i => i.IsError);
         bool warning = mine.Any(i => !i.IsError);
+        HasOwnError = error;
+        HasOwnWarning = !error && warning;
+
         foreach (var c in Children)
         {
             var (ce, cw) = c.ApplyIssues(byNode);
@@ -163,6 +294,12 @@ public sealed class NodeViewModel : ObservableObject
 
     public FieldViewModel? GetField(string xmlName) => Fields.FirstOrDefault(f => f.XmlName == xmlName);
 
+    public IEnumerable<NodeViewModel> Ancestors()
+    {
+        for (var p = Parent; p is not null; p = p.Parent)
+            yield return p;
+    }
+
     public IEnumerable<NodeViewModel> DescendantsAndSelf()
     {
         yield return this;
@@ -173,28 +310,47 @@ public sealed class NodeViewModel : ObservableObject
 
     public void ExpandAncestors()
     {
-        for (var p = Parent; p is not null; p = p.Parent)
-            p.IsExpanded = true;
+        foreach (var a in Ancestors())
+            a.IsExpanded = true;
     }
 
     // ---- change notifications --------------------------------------------------------
 
     internal void OnAttributeChanged(string xmlName)
     {
-        if (xmlName is "name" or "text")
-            OnPropertyChanged(nameof(Header));
+        switch (xmlName)
+        {
+            case "name" or "text" or "itemtext" or "prompttext":
+                OnPropertyChanged(nameof(Header));
+                OnPropertyChanged(nameof(Caption));
+                OnPropertyChanged(nameof(CaptionSingleLine));
+                break;
+            case "image" or "largeimage":
+                _smallImageLoaded = false;
+                _largeImageLoaded = false;
+                _smallImage = null;
+                _largeImage = null;
+                OnPropertyChanged(nameof(SmallImage));
+                OnPropertyChanged(nameof(LargeImage));
+                OnPropertyChanged(nameof(HasSmallImage));
+                OnPropertyChanged(nameof(HasLargeImage));
+                break;
+        }
         Doc.MarkChanged();
     }
 
     private void ChildrenChanged()
     {
         OnPropertyChanged(nameof(Header));
+        OnPropertyChanged(nameof(FirstChild));
+        OnPropertyChanged(nameof(Slideout));
         foreach (var o in AddChildOptions)
             o.Refresh();
         foreach (var c in Children)
         {
             c.MoveUpCommand.RaiseCanExecuteChanged();
             c.MoveDownCommand.RaiseCanExecuteChanged();
+            c.NotifyPreviewLayoutChanged();
         }
         Doc.MarkChanged();
     }

@@ -24,6 +24,16 @@ public sealed class StringToVisibilityConverter : IValueConverter
         => throw new NotSupportedException();
 }
 
+/// <summary>Negates a bool (null counts as false).</summary>
+public sealed class InverseBoolConverter : IValueConverter
+{
+    public object Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is not true;
+
+    public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture)
+        => value is not true;
+}
+
 /// <summary>true → Collapsed, false → Visible.</summary>
 public sealed class InverseBoolToVisibilityConverter : IValueConverter
 {

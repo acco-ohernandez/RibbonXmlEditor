@@ -10,7 +10,7 @@ namespace RibbonXmlEditor.Tests;
 /// <summary>Headless checks of the tree commands and field bindings. Runs on an STA thread like WPF would.</summary>
 public class ViewModelTests
 {
-    private static void Sta(Action body)
+    internal static void Sta(Action body)
     {
         Exception? error = null;
         var t = new Thread(() =>
@@ -25,7 +25,7 @@ public class ViewModelTests
             throw new Xunit.Sdk.XunitException($"Failed on STA thread: {error}");
     }
 
-    private static (MainViewModel main, DocumentViewModel doc) Blank()
+    internal static (MainViewModel main, DocumentViewModel doc) Blank()
     {
         var main = new MainViewModel();
         return (main, main.Document!);
@@ -181,7 +181,9 @@ public class ViewModelTests
             Assert.True(button.GetField("contexthelp")!.HasError);
             Assert.False(button.GetField("name")!.HasIssues);
             Assert.True(button.HasError);
-            Assert.True(doc.Root.HasError); // rolled up to the tab
+            Assert.True(button.HasOwnError);
+            Assert.True(doc.Root.HasError);     // rolled up to the tab
+            Assert.False(doc.Root.HasOwnError); // but the tab itself is fine
             Assert.All(main.Issues, i => Assert.Same(button, i.Node));
             Assert.Contains("@ classname", main.Issues.First(i => i.AttributeName == "classname").Location);
 

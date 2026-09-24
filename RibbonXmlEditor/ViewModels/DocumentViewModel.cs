@@ -109,6 +109,18 @@ public sealed class DocumentViewModel : ObservableObject
 
     public RelayCommand SelectDllCommand => Main.SelectDllCommand;
 
+    // ---- ribbon preview --------------------------------------------------------------
+
+    /// <summary>Closes every open drop list in the preview (used when the preview tab is hidden).</summary>
+    public void ClosePreviewPopups()
+    {
+        foreach (var n in Root.DescendantsAndSelf())
+        {
+            if (n.Node.Kind is Schema.ElementKind.PulldownButtons or Schema.ElementKind.SplitButtons or Schema.ElementKind.ComboBox)
+                n.IsPreviewExpanded = false;
+        }
+    }
+
     // ---- lookup ----------------------------------------------------------------------
 
     public NodeViewModel? FindNode(RibbonNode node)

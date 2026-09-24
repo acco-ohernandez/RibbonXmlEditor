@@ -16,6 +16,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         DataContextChanged += OnDataContextChanged;
+
+        // A selection made from the ribbon preview or the issues list should scroll the tree to the item.
+        Tree.AddHandler(TreeViewItem.SelectedEvent, new RoutedEventHandler((_, e) => (e.OriginalSource as TreeViewItem)?.BringIntoView()));
     }
 
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)

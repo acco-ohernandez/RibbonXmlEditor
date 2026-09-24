@@ -43,10 +43,16 @@ with it before you save.
      `*_Tab.dll` sits next to the ribbon) lists every `IExternalCommand` class in the DLL. The DLL is
      read as metadata only, so it works on machines without Revit and with 2023–2027 builds alike.
    - **Tab node**: also edits the file header (`<!-- Version x.y.z yyyy-mm-dd -->`).
-4. The **issues list** at the bottom updates as you type. Double-click an issue to jump to the field.
+4. The **Issues** tab at the bottom updates as you type. Double-click an issue to jump to the field.
    *Errors* mean Revit will throw, crash, or silently truncate the panel; *warnings* mean it works
    but looks wrong. Saving with errors asks for confirmation.
-5. **Save** (`Ctrl+S`) backs the previous file up, then writes atomically (temp file + rename).
+5. The **Ribbon preview** tab draws a schematic ribbon: panels left to right, a single stacked item
+   large, two or three stacked items as small rows, pulldown / split / combo arrows that drop their
+   lists on click, and a chevron on the panel title for slide-outs. Click any item to select it in the
+   tree; the tree selection is outlined in blue. Red and orange outlines follow the validator, and a
+   coloured glyph stands in for an empty or missing image.
+6. **Save** (`Ctrl+S`) backs the previous file up, then writes atomically (temp file + rename).
+   **File → Close** (`Ctrl+W`) unloads the file and leaves the editor empty.
 
 The first save of a hand-written production file re-indents it (one attribute per line, two-space
 indent). Content is unchanged; the round-trip test proves it.

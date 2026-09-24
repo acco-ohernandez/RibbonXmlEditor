@@ -19,10 +19,11 @@ public static partial class ImageCatalog
             if (!File.Exists(path))
                 return null;
             using var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+            // Stream-sourced images bypass WPF's URI image cache, so a replaced PNG is always re-read.
+            // (Do not add BitmapCreateOptions.IgnoreImageCache here: with a StreamSource it throws in EndInit.)
             var bmp = new BitmapImage();
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
             bmp.DecodePixelWidth = decodePixelWidth;
             bmp.StreamSource = fs;
             bmp.EndInit();

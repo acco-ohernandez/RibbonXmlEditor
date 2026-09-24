@@ -121,6 +121,7 @@
         <KeyBinding Key="O" Modifiers="Control" Command="{Binding OpenCommand}" />
         <KeyBinding Key="S" Modifiers="Control" Command="{Binding SaveCommand}" />
         <KeyBinding Key="S" Modifiers="Control+Shift" Command="{Binding SaveAsCommand}" />
+        <KeyBinding Key="W" Modifiers="Control" Command="{Binding CloseCommand}" />
     </Window.InputBindings>
 
     <DockPanel>
@@ -140,6 +141,8 @@
                         </Style>
                     </MenuItem.ItemContainerStyle>
                 </MenuItem>
+                <MenuItem Header="_Close" Command="{Binding CloseCommand}" InputGestureText="Ctrl+W"
+                          ToolTip="Unload the open file and leave the editor empty" />
                 <Separator />
                 <MenuItem Header="_Save" Command="{Binding SaveCommand}" InputGestureText="Ctrl+S" />
                 <MenuItem Header="Save _As..." Command="{Binding SaveAsCommand}" InputGestureText="Ctrl+Shift+S" />
@@ -204,7 +207,7 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="*" />
                 <RowDefinition Height="5" />
-                <RowDefinition Height="170" MinHeight="60" />
+                <RowDefinition Height="230" MinHeight="60" />
             </Grid.RowDefinitions>
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="360" MinWidth="220" />
@@ -213,7 +216,8 @@
             </Grid.ColumnDefinitions>
 
             <!-- Tree -->
-            <TreeView x:Name="Tree" Grid.Row="0" Grid.Column="0"
+            <Grid Grid.Row="0" Grid.Column="0">
+            <TreeView x:Name="Tree"
                       ItemsSource="{Binding Document.RootItems}"
                       ItemContainerStyle="{StaticResource RibbonTreeItemStyle}"
                       PreviewMouseRightButtonDown="Tree_PreviewMouseRightButtonDown"
@@ -225,6 +229,19 @@
                     <KeyBinding Key="D" Modifiers="Control" Command="{Binding SelectedNode.DuplicateCommand}" />
                 </TreeView.InputBindings>
             </TreeView>
+            <TextBlock Margin="14" Foreground="#808080" Text="No file open." IsHitTestVisible="False">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding Document}" Value="{x:Null}">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
+            </Grid>
 
             <GridSplitter Grid.Row="0" Grid.Column="1" HorizontalAlignment="Stretch" Background="#E0E0E0" />
 
@@ -232,14 +249,29 @@
             <ScrollViewer Grid.Row="0" Grid.Column="2" VerticalScrollBarVisibility="Auto">
                 <Grid>
                     <ContentControl x:Name="Editor" Content="{Binding SelectedNode}"
-                                    ContentTemplate="{StaticResource NodeEditorTemplate}" Focusable="False" />
-                    <TextBlock Text="Select an item in the tree to edit it." Foreground="#808080" Margin="14">
+                                    ContentTemplate="{StaticResource NodeEditorTemplate}" Focusable="False">
+                        <ContentControl.Style>
+                            <!-- A ContentControl still renders its template for null content; hide it instead. -->
+                            <Style TargetType="ContentControl">
+                                <Style.Triggers>
+                                    <Trigger Property="Content" Value="{x:Null}">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ContentControl.Style>
+                    </ContentControl>
+                    <TextBlock Foreground="#808080" Margin="14">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Visibility" Value="Collapsed" />
+                                <Setter Property="Text" Value="Select an item in the tree to edit it." />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding SelectedNode}" Value="{x:Null}">
                                         <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding Document}" Value="{x:Null}">
+                                        <Setter Property="Text" Value="No file open. Use File > New or File > Open." />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
@@ -250,10 +282,10 @@
 
             <GridSplitter Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="#E0E0E0" />
 
-            <!-- Issues -->
-            <DockPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3">
-                <TextBlock DockPanel.Dock="Top" Text="{Binding IssueSummary}" FontWeight="SemiBold" Margin="8,4" />
-                <ListView x:Name="IssuesList" ItemsSource="{Binding Issues}" BorderThickness="0,1,0,0"
+            <!-- Issues / Ribbon preview -->
+            <TabControl Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="3" Padding="0" BorderThickness="0,1,0,0">
+                <TabItem Header="{Binding IssueSummary}" HeaderStringFormat="Issues: {0}">
+                <ListView x:Name="IssuesList" ItemsSource="{Binding Issues}" BorderThickness="0"
                           MouseDoubleClick="IssuesList_MouseDoubleClick"
                           ToolTip="Double-click an issue to jump to it">
                     <ListView.View>
@@ -270,7 +302,11 @@
                         </GridView>
                     </ListView.View>
                 </ListView>
-            </DockPanel>
+                </TabItem>
+                <TabItem Header="Ribbon preview" ToolTip="Schematic view of the ribbon. Click an item to select it.">
+                    <v:RibbonPreview />
+                </TabItem>
+            </TabControl>
         </Grid>
     </DockPanel>
 </Window>

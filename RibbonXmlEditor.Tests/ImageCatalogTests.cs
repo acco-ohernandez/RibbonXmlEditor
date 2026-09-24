@@ -34,6 +34,42 @@ public class ImageCatalogTests
     }
 
     [Fact]
+    public void LoadThumbnail_RealPng_LoadsAndReleasesTheFile()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "RibbonXmlEditorTests", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var png = Path.Combine(dir, "Tool_16x16.png");
+            ViewModelTests.Sta(() =>
+            {
+                var visual = new System.Windows.Media.DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                    dc.DrawRectangle(System.Windows.Media.Brushes.SeaGreen, null, new System.Windows.Rect(0, 0, 16, 16));
+                var rtb = new System.Windows.Media.Imaging.RenderTargetBitmap(16, 16, 96, 96, System.Windows.Media.PixelFormats.Pbgra32);
+                rtb.Render(visual);
+                var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(rtb));
+                using (var fs = File.Create(png))
+                    encoder.Save(fs);
+
+                var bmp = ImageCatalog.LoadThumbnail(png, 16);
+                Assert.NotNull(bmp);
+                Assert.Equal(16, bmp!.PixelWidth);
+                Assert.True(bmp.IsFrozen);
+            });
+
+            // The file must not stay locked after loading (users replace PNGs while the editor is open).
+            File.Delete(png);
+            Assert.False(File.Exists(png));
+        }
+        finally
+        {
+            if (Directory.Exists(dir)) Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
     public void LoadThumbnail_MissingFile_ReturnsNull()
     {
         Assert.Null(ImageCatalog.LoadThumbnail(@"C:\nope\missing.png", 32));

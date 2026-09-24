@@ -31,6 +31,7 @@ public sealed class MainViewModel : ObservableObject
         OpenRecentCommand = new RelayCommand<string>(OpenFile);
         SaveCommand = new RelayCommand(() => Save(), () => Document is not null);
         SaveAsCommand = new RelayCommand(() => SaveAs(), () => Document is not null);
+        CloseCommand = new RelayCommand(CloseDocument, () => Document is not null);
         OpenBackupsFolderCommand = new RelayCommand(OpenBackupsFolder);
         ExitCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
         SelectDllCommand = new RelayCommand(SelectDll, () => Document is not null);
@@ -67,6 +68,7 @@ public sealed class MainViewModel : ObservableObject
             NotifyHeaderProperties();
             SaveCommand.RaiseCanExecuteChanged();
             SaveAsCommand.RaiseCanExecuteChanged();
+            CloseCommand.RaiseCanExecuteChanged();
             SelectDllCommand.RaiseCanExecuteChanged();
             RescanDllCommand.RaiseCanExecuteChanged();
         }
@@ -89,7 +91,7 @@ public sealed class MainViewModel : ObservableObject
         ? "Ribbon XML Editor"
         : $"{Document.DisplayName}{(Document.IsDirty ? " *" : string.Empty)} - Ribbon XML Editor";
 
-    public string StatusPath => Document?.FilePath ?? "Not saved yet";
+    public string StatusPath => Document is null ? "No file open" : Document.FilePath ?? "Not saved yet";
     public bool IsDeployedCopy => Document?.FilePath?.StartsWith(DeployedRoot, StringComparison.OrdinalIgnoreCase) == true;
     public bool ShowDeployedNotice => IsDeployedCopy && !_noticeDismissed;
     public string ImagesFolder => _settings.EffectiveImagesFolder;
@@ -103,6 +105,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand<string> OpenRecentCommand { get; }
     public RelayCommand SaveCommand { get; }
     public RelayCommand SaveAsCommand { get; }
+    public RelayCommand CloseCommand { get; }
     public RelayCommand OpenBackupsFolderCommand { get; }
     public RelayCommand ExitCommand { get; }
     public RelayCommand SelectDllCommand { get; }
@@ -238,6 +241,18 @@ public sealed class MainViewModel : ObservableObject
             Dialogs.Error($"Could not save\n{path}\n\n{ex.Message}");
             return false;
         }
+    }
+
+    /// <summary>Unloads the open file after the usual save prompt, leaving the editor empty.</summary>
+    private void CloseDocument()
+    {
+        if (!ConfirmDiscardChanges())
+            return;
+        _loadIssues.Clear();
+        _noticeDismissed = false;
+        Document = null;      // unwires events and refreshes header/commands
+        SelectedNode = null;
+        Revalidate();         // clears the issue list and stops the debounce timer
     }
 
     /// <summary>Returns false when the user cancels. Offers to save unsaved changes first.</summary>
@@ -393,7 +408,11 @@ public sealed class MainViewModel : ObservableObject
             OnPropertyChanged(nameof(DllStatusText));
     }
 
-    private void OnNodeSelected(object? sender, NodeViewModel node) => SelectedNode = node;
+    private void OnNodeSelected(object? sender, NodeViewModel node)
+    {
+        SelectedNode = node;
+        node.RevealInPreview();
+    }
 
     public void Revalidate()
     {
