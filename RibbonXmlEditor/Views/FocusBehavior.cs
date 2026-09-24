@@ -29,7 +29,11 @@ public static class FocusBehavior
         {
             var handler = Handler(element);
             field.FocusRequested += handler;
-            element.Unloaded += (_, _) => field.FocusRequested -= handler;
+            element.Unloaded += (_, _) =>
+            {
+                field.FocusRequested -= handler;
+                Handlers.Remove(element);
+            };
         }
     }
 

@@ -15,6 +15,7 @@
     <Company>ACCO Engineered Systems</Company>
     <Description>Editor for the .ribbon XML files that define ACCO Revit ribbon tabs.</Description>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
