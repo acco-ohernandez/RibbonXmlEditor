@@ -80,16 +80,39 @@ public static class RibbonXmlWriter
         w.WriteEndDocument();
     }
 
-    private static void WriteElement(RibbonNode node, XmlWriter w)
+    private static void WriteElement(RibbonNode node, XmlWriter w, bool insideComment = false)
     {
+        if (node.IsDisabled && !insideComment)
+        {
+            // A disabled node is written as a comment holding its block. The block is not re-indented:
+            // attribute values may contain raw line breaks, and indenting those lines would change the values.
+            var indent = new string(' ', 2 * node.Ancestors().Count());
+            w.WriteComment(SafeComment("\r\n" + SerializeFragment(node) + "\r\n" + indent));
+            return;
+        }
+
         w.WriteStartElement(node.Def.XmlName);
         foreach (var a in node.Def.Attributes)
             w.WriteAttributeString(a.XmlName, ToFileNewlines(node[a.XmlName]));
         foreach (var extra in node.ExtraAttributes)
             w.WriteAttributeString(extra.Key, ToFileNewlines(extra.Value));
         foreach (var child in node.Children)
-            WriteElement(child, w);
+            WriteElement(child, w, insideComment || node.IsDisabled);
         w.WriteEndElement();
+    }
+
+    /// <summary>The node and its subtree as an XML fragment (no declaration), used inside a disabled-item comment.</summary>
+    private static string SerializeFragment(RibbonNode node)
+    {
+        var settings = CreateSettings();
+        settings.OmitXmlDeclaration = true;
+        settings.ConformanceLevel = ConformanceLevel.Fragment;
+        using var sw = new StringWriter();
+        using (var inner = XmlWriter.Create(sw, settings))
+        {
+            WriteElement(node, inner, insideComment: true);
+        }
+        return sw.ToString();
     }
 
     private static string ToFileNewlines(string value)

@@ -36,8 +36,10 @@ with it before you save.
    the tab for *Close Others* / *Close All*. **File → Save All** saves every tab with changes.
 2. The **tree** on the left shows Tab → Panel → structure (Stacked items, Split button, Slide-out,
    Radio group, Separator) → items (Button, Pulldown, Combo box, Text box, …).
-   Right-click for **Add / Duplicate / Move Up / Move Down / Delete** (`Del`, `Alt+↑/↓`, `Ctrl+D`).
-   The *Add* menu only offers what Revit accepts there and disables at the limit (3 stacked items).
+   Right-click for **Add / Duplicate / Disable / Move Up / Move Down / Delete** (`Del`, `Alt+↑/↓`,
+   `Ctrl+D`, `Ctrl+E`). The *Add* menu only offers what Revit accepts there and disables at the limit
+   (3 stacked items). **Disable** keeps an item in the file as an XML comment so Revit skips it; the
+   tree shows it grey, the preview shows it ghosted, and **Enable** brings it back.
 3. The **property panel** on the right edits the selected item. Every attribute Revit reads is shown;
    required ones are marked `*`. Captions and tooltips accept `Enter` for a line break, exactly as
    the production files do.
@@ -103,13 +105,19 @@ RibbonXmlEditor.Tests/   xUnit; production-file tests skip when the repo / deplo
 
 ## Keeping the schema in sync
 
-The `.ribbon` format has no XSD; it is whatever `RibbonBuilder.cs` parses. Two facts drive the
-editor's design and must stay true:
+The `.ribbon` format has no XSD; it is whatever `RibbonBuilder.cs` parses. The canonical copy of that
+parser lives in this repository at `RibbonXmlEditor\RibbonBuilder\RibbonBuilder.cs` (with its own
+README on how to use it in other add-ins); `BTT_ACCORevit-Ribbons` carries a copy. Facts the editor
+relies on:
 
-- The parser reads every attribute unconditionally (`Attributes["x"].Value`), so **the writer always
-  emits every attribute**, empty if unset. A missing attribute crashes Revit at startup.
+- Builders before 3.0 read every attribute unconditionally, so **the writer always emits every
+  attribute**, empty if unset. Version 3.0 tolerates a missing one, but older DLLs are still deployed.
 - The parser loads with `XmlDocument`, which keeps raw line breaks inside attribute values. The
   editor reads with `XmlDocument` too (an `XDocument`/`XmlReader` load would collapse them to spaces).
+- Disabled items are XML comments; version 3.0 ignores comments, older builders count them as stack
+  items (the validator warns when that matters).
 
-If `RibbonBuilder.cs` gains or drops an element or attribute, update `Schema\RibbonSchema.cs`
-(and the table in the plan) — nothing else needs to change.
+Two tests enforce the sync: `SchemaSyncTests` compares `RibbonBuilder.XmlNames` with
+`Schema\RibbonSchema.cs`, and checks that the BTT copy is identical to the canonical one. To change
+the format, edit the builder's `XmlNames` and code, update `RibbonSchema.cs`, run the tests, then
+copy the file into every add-in solution that uses it.

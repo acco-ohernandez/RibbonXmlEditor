@@ -24,6 +24,26 @@ public sealed class RibbonNode
     public RibbonNode? Parent { get; private set; }
     public IReadOnlyList<RibbonNode> Children => _children;
 
+    /// <summary>
+    /// Disabled nodes are written to the file as an XML comment holding their block, so Revit skips them.
+    /// Children of a disabled node are implicitly disabled (comments cannot nest).
+    /// </summary>
+    public bool IsDisabled { get; set; }
+
+    /// <summary>True when this node or any ancestor is disabled.</summary>
+    public bool IsEffectivelyDisabled
+    {
+        get
+        {
+            for (var n = this; n is not null; n = n.Parent)
+                if (n.IsDisabled) return true;
+            return false;
+        }
+    }
+
+    /// <summary>Children that will actually reach Revit.</summary>
+    public IEnumerable<RibbonNode> EnabledChildren => _children.Where(c => !c.IsDisabled);
+
     /// <summary>Attributes present in the file that the schema does not know. Written back untouched.</summary>
     public List<KeyValuePair<string, string>> ExtraAttributes { get; } = new();
 
@@ -77,7 +97,7 @@ public sealed class RibbonNode
 
     public RibbonNode DeepClone()
     {
-        var copy = new RibbonNode(Kind);
+        var copy = new RibbonNode(Kind) { IsDisabled = IsDisabled };
         foreach (var kv in _attributes)
             copy._attributes[kv.Key] = kv.Value;
         copy.ExtraAttributes.AddRange(ExtraAttributes);

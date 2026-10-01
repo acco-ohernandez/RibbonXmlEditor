@@ -19,10 +19,13 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
 
-  
-
   <ItemGroup>
     <ProjectReference Include="..\RibbonXmlEditor\RibbonXmlEditor.csproj" />
+  </ItemGroup>
+
+  <!-- The Revit-side parser source, embedded so SchemaSyncTests can compare its XmlNames with RibbonSchema. -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\RibbonXmlEditor\RibbonBuilder\RibbonBuilder.cs" LogicalName="RibbonBuilder.cs" />
   </ItemGroup>
 
 </Project>

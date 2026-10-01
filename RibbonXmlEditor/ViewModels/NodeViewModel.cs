@@ -38,6 +38,7 @@ public sealed class NodeViewModel : ObservableObject
         MoveUpCommand = new RelayCommand(() => Move(-1), () => Parent is not null && Node.IndexInParent > 0);
         MoveDownCommand = new RelayCommand(() => Move(+1), () => Parent is not null && Node.IndexInParent < Parent.Children.Count - 1);
         SelectCommand = new RelayCommand(SelectFromPreview);
+        ToggleEnabledCommand = new RelayCommand(() => IsDisabled = !IsDisabled, () => CanToggleEnabled);
     }
 
     public RibbonNode Node { get; }
@@ -61,6 +62,52 @@ public sealed class NodeViewModel : ObservableObject
     /// <summary>Selects this node from the ribbon preview: expands the tree path and closes the parent's drop list.</summary>
     public RelayCommand SelectCommand { get; }
 
+    /// <summary>Disable / Enable: a disabled node is saved as an XML comment and skipped by Revit.</summary>
+    public RelayCommand ToggleEnabledCommand { get; }
+
+    // ---- enabled / disabled ----------------------------------------------------------
+
+    public bool IsDisabled
+    {
+        get => Node.IsDisabled;
+        set
+        {
+            if (Node.IsDisabled == value)
+                return;
+            Node.IsDisabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsEnabledInRevit));
+            OnPropertyChanged(nameof(ToggleEnabledHeader));
+            OnPropertyChanged(nameof(Header));
+            foreach (var d in DescendantsAndSelf())
+                d.NotifyEffectiveDisabledChanged();
+            Doc.MarkChanged();
+        }
+    }
+
+    /// <summary>Inverse of <see cref="IsDisabled"/>, for the "Enabled in Revit" check box.</summary>
+    public bool IsEnabledInRevit
+    {
+        get => !IsDisabled;
+        set => IsDisabled = !value;
+    }
+
+    public bool IsEffectivelyDisabled => Node.IsEffectivelyDisabled;
+    public bool IsDisabledByAncestor => !IsDisabled && IsEffectivelyDisabled;
+
+    /// <summary>The tab cannot be disabled, and children of a disabled node are disabled with it.</summary>
+    public bool CanToggleEnabled => !IsTab && !(Parent?.IsEffectivelyDisabled ?? false);
+
+    public string ToggleEnabledHeader => IsDisabled ? "_Enable" : "_Disable";
+
+    private void NotifyEffectiveDisabledChanged()
+    {
+        OnPropertyChanged(nameof(IsEffectivelyDisabled));
+        OnPropertyChanged(nameof(IsDisabledByAncestor));
+        OnPropertyChanged(nameof(CanToggleEnabled));
+        ToggleEnabledCommand.RaiseCanExecuteChanged();
+    }
+
     /// <summary>Node-level issues (not tied to a single attribute).</summary>
     public ObservableCollection<Issue> NodeIssues { get; } = new();
 
@@ -70,19 +117,25 @@ public sealed class NodeViewModel : ObservableObject
     {
         get
         {
-            var name = Node.Name;
-            if (Def.HasAttribute("name") && name.Length > 0)
-                return $"{Def.DisplayName}: {name}";
-            if (Node.Kind == ElementKind.Button && Node["text"].Length > 0)
-                return $"{Def.DisplayName}: {Node["text"].Replace('\n', ' ')}";
-            if (Def.CanHaveChildren)
-            {
-                return Def.MaxChildren == RibbonSchema.Unbounded
-                    ? $"{Def.DisplayName} ({Children.Count})"
-                    : $"{Def.DisplayName} ({Children.Count}/{Def.MaxChildren})";
-            }
-            return Def.DisplayName;
+            var text = BaseHeader();
+            return IsDisabled ? text + " (disabled)" : text;
         }
+    }
+
+    private string BaseHeader()
+    {
+        var name = Node.Name;
+        if (Def.HasAttribute("name") && name.Length > 0)
+            return $"{Def.DisplayName}: {name}";
+        if (Node.Kind == ElementKind.Button && Node["text"].Length > 0)
+            return $"{Def.DisplayName}: {Node["text"].Replace('\n', ' ')}";
+        if (Def.CanHaveChildren)
+        {
+            return Def.MaxChildren == RibbonSchema.Unbounded
+                ? $"{Def.DisplayName} ({Children.Count})"
+                : $"{Def.DisplayName} ({Children.Count}/{Def.MaxChildren})";
+        }
+        return Def.DisplayName;
     }
 
     public string Glyph => Node.Kind switch

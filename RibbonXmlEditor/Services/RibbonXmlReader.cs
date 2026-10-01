@@ -147,10 +147,18 @@ public static class RibbonXmlReader
                     }
                     break;
 
-                case XmlComment:
+                case XmlComment comment:
+                    // A comment that holds exactly one ribbon element is a disabled item (see RibbonXmlWriter).
+                    if (TryParseDisabledElement(comment.Value ?? string.Empty, out var disabledElement, out var disabledDef))
+                    {
+                        var disabled = ReadElement(disabledElement, disabledDef, issues, ref repairs);
+                        disabled.IsDisabled = true;
+                        node.AddChild(disabled);
+                        break;
+                    }
                     repairs = true;
                     issues.Add(new Issue(IssueSeverity.Warning, "load.comment-dropped",
-                        $"A comment inside <{def.XmlName}> was dropped. Revit counts comments as child items, which can break the 1-3 stacked-items limit.",
+                        $"A comment inside <{def.XmlName}> was dropped. Builders before 3.0 count comments as child items, which can break the 1-3 stacked-items limit.",
                         node));
                     break;
 
@@ -166,6 +174,30 @@ public static class RibbonXmlReader
         }
 
         return node;
+    }
+
+    /// <summary>Parses the text of a comment as XML; succeeds when it contains exactly one known ribbon element.</summary>
+    private static bool TryParseDisabledElement(string commentText, out XmlElement element, out ElementDef def)
+    {
+        element = null!;
+        def = null!;
+        if (commentText.IndexOf('<') < 0)
+            return false;
+        try
+        {
+            var wrapper = new XmlDocument();
+            wrapper.LoadXml("<x>" + commentText + "</x>");
+            var elements = wrapper.DocumentElement!.ChildNodes.OfType<XmlElement>().ToList();
+            if (elements.Count != 1 || !RibbonSchema.TryGetByXmlName(elements[0].Name, out var found))
+                return false;
+            element = elements[0];
+            def = found;
+            return true;
+        }
+        catch (XmlException)
+        {
+            return false;
+        }
     }
 
     private static string NormalizeNewlines(string value)

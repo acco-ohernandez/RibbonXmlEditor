@@ -63,7 +63,7 @@ public static class RibbonSchema
 
         new ElementDef(ElementKind.StackedItems, "stackeditems", "Stacked items",
             "1 to 3 items. One item is shown large; 2 or 3 are stacked vertically at small size. " +
-            "Revit stops reading the rest of the panel if the count is 0 or more than 3.",
+            "Revit skips a stack with 0 or more than 3 items (builders before 3.0 stop reading the rest of the panel).",
             Array.Empty<AttributeDef>(),
             new[] { ElementKind.Button, ElementKind.PulldownButtons, ElementKind.ComboBox, ElementKind.TextBox }, 1, 3),
 

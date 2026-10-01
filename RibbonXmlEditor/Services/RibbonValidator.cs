@@ -15,6 +15,7 @@ public sealed record ValidationContext(IReadOnlySet<string>? KnownClasses, strin
 /// <summary>
 /// Checks a document against what Revit's RibbonBuilder will actually do with it.
 /// Errors = Revit throws, crashes, or silently truncates the ribbon. Warnings = works but suspicious.
+/// Disabled nodes (written as comments) are skipped by Revit, so only their comment-safety is checked.
 /// </summary>
 public static partial class RibbonValidator
 {
@@ -54,6 +55,12 @@ public static partial class RibbonValidator
 
     private static void ValidateNode(RibbonNode node, List<Issue> issues, ValidationContext ctx, bool imagesFolderMissing)
     {
+        if (node.IsDisabled)
+        {
+            ValidateDisabled(node, issues);
+            return;
+        }
+
         var def = node.Def;
 
         foreach (var attr in def.Attributes)
@@ -112,11 +119,13 @@ public static partial class RibbonValidator
             }
         }
 
-        // ---- children --------------------------------------------------------------------
+        // ---- children (only enabled ones reach Revit) ----------------------------------------
 
-        int count = node.Children.Count;
+        var enabled = node.EnabledChildren.ToList();
+        int enabledCount = enabled.Count;
+        int disabledCount = node.Children.Count - enabledCount;
 
-        foreach (var child in node.Children)
+        foreach (var child in enabled)
         {
             if (!def.Allows(child.Kind))
             {
@@ -129,32 +138,49 @@ public static partial class RibbonValidator
             }
         }
 
-        if (node.Kind == ElementKind.StackedItems && (count < 1 || count > 3))
+        if (node.Kind == ElementKind.StackedItems)
         {
             var panel = node.Closest(ElementKind.Panel)?.Name ?? "?";
-            issues.Add(new Issue(IssueSeverity.Error, "stacked.count",
-                $"Stacked items must contain 1 to 3 items (this one has {count}). Revit stops reading the rest of panel \"{panel}\" at this element.",
-                node));
+            if (enabledCount == 0 && disabledCount > 0)
+            {
+                issues.Add(new Issue(IssueSeverity.Warning, "stacked.alldisabled",
+                    $"All {disabledCount} item(s) in this stack are disabled, so Revit shows nothing for it.", node));
+            }
+            else if (enabledCount < 1 || enabledCount > 3)
+            {
+                issues.Add(new Issue(IssueSeverity.Error, "stacked.count",
+                    $"Stacked items must contain 1 to 3 items (this one has {enabledCount}). Revit skips the element; builders before 3.0 stop reading the rest of panel \"{panel}\" here.",
+                    node));
+            }
+            if (enabledCount >= 1 && enabledCount + disabledCount > 3)
+            {
+                issues.Add(new Issue(IssueSeverity.Warning, "stacked.legacycount",
+                    $"This stack has {enabledCount + disabledCount} items including {disabledCount} disabled. Builders before 3.0 count disabled items toward the 3-item limit and stop reading the rest of panel \"{panel}\".",
+                    node));
+            }
         }
-        else if (def.MinChildren > 0 && count == 0)
+        else if (def.MinChildren > 0 && enabledCount == 0)
         {
             issues.Add(new Issue(IssueSeverity.Warning, "container.empty",
-                $"This {def.DisplayName.ToLowerInvariant()} has no items and will appear empty in Revit.", node));
+                disabledCount > 0
+                    ? $"This {def.DisplayName.ToLowerInvariant()} has no enabled items and will appear empty in Revit."
+                    : $"This {def.DisplayName.ToLowerInvariant()} has no items and will appear empty in Revit.",
+                node));
         }
 
         switch (node.Kind)
         {
             case ElementKind.Tab:
-                ReportDuplicates(node.Children.Where(c => c.Kind == ElementKind.Panel), issues,
+                ReportDuplicates(enabled.Where(c => c.Kind == ElementKind.Panel), issues,
                     n => $"Panel name \"{n}\" is used more than once in this tab. Revit throws on duplicate panel names.");
                 break;
 
             case ElementKind.Panel:
-                ValidatePanel(node, issues);
+                ValidatePanel(node, enabled, issues);
                 break;
 
             case ElementKind.PulldownButtons or ElementKind.ComboBox or ElementKind.RadioButtons:
-                ReportDuplicates(node.Children, issues,
+                ReportDuplicates(enabled, issues,
                     n => $"Name \"{n}\" is used more than once inside this {def.DisplayName.ToLowerInvariant()}. Revit throws on duplicate names.");
                 break;
         }
@@ -163,30 +189,47 @@ public static partial class RibbonValidator
             ValidateNode(child, issues, ctx, imagesFolderMissing);
     }
 
-    private static void ValidatePanel(RibbonNode panel, List<Issue> issues)
+    /// <summary>A disabled node lives inside an XML comment, which cannot contain "--".</summary>
+    private static void ValidateDisabled(RibbonNode node, List<Issue> issues)
     {
-        var splits = panel.Children.Where(c => c.Kind == ElementKind.SplitButtons).Skip(1);
+        foreach (var n in node.DescendantsAndSelf())
+        {
+            foreach (var attr in n.Def.Attributes)
+            {
+                if (n[attr.XmlName].Contains("--", StringComparison.Ordinal))
+                {
+                    issues.Add(new Issue(IssueSeverity.Warning, "disabled.doubledash",
+                        $"'{attr.Label}' contains \"--\". Disabled items are stored as an XML comment, which cannot contain \"--\", so it will be saved as \"- -\".",
+                        n, attr.XmlName));
+                }
+            }
+        }
+    }
+
+    private static void ValidatePanel(RibbonNode panel, List<RibbonNode> enabledStructures, List<Issue> issues)
+    {
+        var splits = enabledStructures.Where(c => c.Kind == ElementKind.SplitButtons).Skip(1);
         foreach (var extra in splits)
         {
             issues.Add(new Issue(IssueSeverity.Error, "split.multiple",
-                "Only one split button is possible per panel: Revit's RibbonBuilder gives every split button the same internal name, and a second one throws a duplicate-name exception.",
+                "Only one split button is possible per panel with builders before 3.0: they give every split button the same internal name, and a second one throws a duplicate-name exception.",
                 extra));
         }
 
         // Every item that becomes a RibbonItem in this RibbonPanel must have a unique name.
         var panelItems = new List<RibbonNode>();
-        foreach (var structure in panel.Children)
+        foreach (var structure in enabledStructures)
         {
             switch (structure.Kind)
             {
                 case ElementKind.StackedItems:
-                    panelItems.AddRange(structure.Children.Where(c => RibbonSchema.IsPanelItem(c.Kind)));
+                    panelItems.AddRange(structure.EnabledChildren.Where(c => RibbonSchema.IsPanelItem(c.Kind)));
                     break;
                 case ElementKind.RadioButtons:
                     panelItems.Add(structure);
                     break;
                 case ElementKind.SplitButtons or ElementKind.SlideoutPanel:
-                    panelItems.AddRange(structure.Children.Where(c => c.Kind == ElementKind.Button));
+                    panelItems.AddRange(structure.EnabledChildren.Where(c => c.Kind == ElementKind.Button));
                     break;
             }
         }

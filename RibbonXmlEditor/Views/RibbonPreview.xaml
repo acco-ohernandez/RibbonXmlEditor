@@ -81,6 +81,12 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <!-- Disabled items are skipped by Revit; show them ghosted so they can be found and re-enabled. -->
+                <DataTrigger Binding="{Binding IsEffectivelyDisabled}" Value="True">
+                    <Setter Property="Opacity" Value="0.35" />
+                </DataTrigger>
+            </Style.Triggers>
         </Style>
 
         <Style x:Key="ArrowToggle" TargetType="ToggleButton" BasedOn="{StaticResource FlatButton}">
@@ -367,6 +373,15 @@
         <!-- Panel: items row, optional slide-out row, title bar with slide-out chevron. -->
         <DataTemplate x:Key="Preview.Panel">
             <Border Background="#F3F3F3" BorderBrush="#C6C6C6" BorderThickness="1" Margin="0,0,4,0">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsEffectivelyDisabled}" Value="True">
+                                <Setter Property="Opacity" Value="0.35" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Border Style="{StaticResource SelectionRing}">
                     <Grid>
                         <Grid.RowDefinitions>

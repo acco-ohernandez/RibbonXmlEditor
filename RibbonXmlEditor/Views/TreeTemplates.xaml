@@ -25,6 +25,8 @@
                         </MenuItem.ItemContainerStyle>
                     </MenuItem>
                     <MenuItem Header="D_uplicate" Command="{Binding DuplicateCommand}" />
+                    <MenuItem Header="{Binding ToggleEnabledHeader}" Command="{Binding ToggleEnabledCommand}" InputGestureText="Ctrl+E"
+                              ToolTip="A disabled item stays in the file as a comment and is skipped by Revit" />
                     <Separator />
                     <MenuItem Header="Move _Up" Command="{Binding MoveUpCommand}" InputGestureText="Alt+Up" />
                     <MenuItem Header="Move _Down" Command="{Binding MoveDownCommand}" InputGestureText="Alt+Down" />
@@ -37,7 +39,18 @@
                 <TextBlock Text="{Binding Glyph}" Foreground="White" FontSize="10" FontWeight="Bold"
                            HorizontalAlignment="Center" VerticalAlignment="Center" />
             </Border>
-            <TextBlock Text="{Binding Header}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Header}" VerticalAlignment="Center">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsEffectivelyDisabled}" Value="True">
+                                <Setter Property="Foreground" Value="#909090" />
+                                <Setter Property="FontStyle" Value="Italic" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <Ellipse Width="8" Height="8" Fill="#D32F2F" Margin="6,0,0,0" VerticalAlignment="Center"
                      ToolTip="Contains errors"
                      Visibility="{Binding HasError, Converter={StaticResource TreeBoolToVis}}" />

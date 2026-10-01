@@ -26,4 +26,11 @@
     <EmbeddedResource Include="Resources\ButtonStructureTemplate.ribbon" LogicalName="RibbonXmlEditor.Resources.ButtonStructureTemplate.ribbon" />
   </ItemGroup>
 
+  <!-- RibbonBuilder.cs is the Revit-side parser kept here as the canonical copy. It needs the Revit API,
+       so it is not compiled into the editor; it stays visible in Solution Explorer as a plain file. -->
+  <ItemGroup>
+    <Compile Remove="RibbonBuilder\**" />
+    <None Include="RibbonBuilder\**" />
+  </ItemGroup>
+
 </Project>
