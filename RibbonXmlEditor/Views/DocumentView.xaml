@@ -163,6 +163,9 @@
                       ItemsSource="{Binding Document.RootItems}"
                       ItemContainerStyle="{StaticResource RibbonTreeItemStyle}"
                       PreviewMouseRightButtonDown="Tree_PreviewMouseRightButtonDown"
+                      PreviewMouseLeftButtonDown="Tree_PreviewMouseLeftButtonDown"
+                      PreviewMouseMove="Tree_PreviewMouseMove"
+                      AllowDrop="True" DragOver="Tree_DragOver" DragLeave="Tree_DragLeave" Drop="Tree_Drop"
                       BorderThickness="0,0,1,0" Padding="4">
                 <TreeView.InputBindings>
                     <KeyBinding Key="Delete" Command="{Binding SelectedNode.DeleteCommand}" />

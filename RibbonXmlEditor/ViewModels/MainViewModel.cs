@@ -22,6 +22,7 @@ public sealed class MainViewModel : ObservableObject
         OpenBackupsFolderCommand = new RelayCommand(OpenBackupsFolder);
         SetImagesFolderCommand = new RelayCommand(SetImagesFolder);
         AboutCommand = new RelayCommand(About);
+        DocumentationCommand = new RelayCommand(() => Dialogs.ShowDocumentation());
         ExitCommand = new RelayCommand(() => RequestClose?.Invoke(this, EventArgs.Empty));
 
         SaveCommand = new RelayCommand(() => ActiveDocument?.Save(), () => ActiveDocument is not null);
@@ -77,6 +78,7 @@ public sealed class MainViewModel : ObservableObject
     public RelayCommand OpenBackupsFolderCommand { get; }
     public RelayCommand SetImagesFolderCommand { get; }
     public RelayCommand AboutCommand { get; }
+    public RelayCommand DocumentationCommand { get; }
     public RelayCommand ExitCommand { get; }
     public RelayCommand SaveCommand { get; }
     public RelayCommand SaveAsCommand { get; }

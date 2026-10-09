@@ -1,0 +1,523 @@
+<Window x:Class="RibbonXmlEditor.Views.DocumentationWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Ribbon XML Editor - Documentation" Height="760" Width="1100" MinHeight="420" MinWidth="720"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="True">
+
+    <Window.Resources>
+        <Style TargetType="Paragraph">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="H1" TargetType="Paragraph">
+            <Setter Property="FontSize" Value="22" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="#1F3A5F" />
+            <Setter Property="Margin" Value="0,18,0,8" />
+        </Style>
+        <Style x:Key="H2" TargetType="Paragraph">
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,10,0,4" />
+        </Style>
+        <Style x:Key="Note" TargetType="Paragraph">
+            <Setter Property="Background" Value="#FFF4CE" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="BorderBrush" Value="#E0C060" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style x:Key="Tip" TargetType="Paragraph">
+            <Setter Property="Background" Value="#E8F1FB" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="BorderBrush" Value="#9CC3EA" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="List">
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="MarkerOffset" Value="8" />
+        </Style>
+        <Style TargetType="ListItem">
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+        <Style x:Key="Code" TargetType="Run">
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="Background" Value="#F0F0F0" />
+        </Style>
+        <Style x:Key="CodeBlock" TargetType="Paragraph">
+            <Setter Property="FontFamily" Value="Consolas" />
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Background" Value="#F4F4F4" />
+            <Setter Property="Padding" Value="8" />
+            <Setter Property="BorderBrush" Value="#D0D0D0" />
+            <Setter Property="BorderThickness" Value="1" />
+        </Style>
+        <Style TargetType="Table">
+            <Setter Property="CellSpacing" Value="0" />
+            <Setter Property="BorderBrush" Value="#C8C8C8" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style TargetType="TableCell">
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="BorderBrush" Value="#C8C8C8" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+        </Style>
+        <Style x:Key="Th" TargetType="TableCell">
+            <Setter Property="Padding" Value="5,3" />
+            <Setter Property="BorderBrush" Value="#C8C8C8" />
+            <Setter Property="BorderThickness" Value="0,0,1,1" />
+            <Setter Property="Background" Value="#E9EEF5" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+        </Style>
+    </Window.Resources>
+
+    <Window.InputBindings>
+        <KeyBinding Key="Escape" Command="Close" />
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="Close" Executed="Close_Executed" />
+    </Window.CommandBindings>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230" />
+            <ColumnDefinition Width="5" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <!-- Topics -->
+        <DockPanel Grid.Column="0" Background="#F7F7F7">
+            <TextBlock DockPanel.Dock="Top" Text="Topics" FontWeight="SemiBold" Margin="10,10,10,6" />
+            <ListBox x:Name="Topics" BorderThickness="0" Background="Transparent" Padding="4"
+                     SelectionChanged="Topics_SelectionChanged" AutomationProperties.Name="Topics">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Title}" Padding="4,3" TextWrapping="Wrap" />
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </DockPanel>
+
+        <GridSplitter Grid.Column="1" HorizontalAlignment="Stretch" Background="#E0E0E0" />
+
+        <!-- The manual. Each top-level Section is one topic; its Tag is the title shown on the left. -->
+        <FlowDocumentScrollViewer x:Name="Viewer" Grid.Column="2" VerticalScrollBarVisibility="Auto"
+                                  IsSelectionEnabled="True" Zoom="100">
+            <FlowDocument x:Name="Doc" FontFamily="Segoe UI" FontSize="13" PagePadding="22,8,26,30"
+                          TextAlignment="Left" IsOptimalParagraphEnabled="True" IsHyphenationEnabled="False"
+                          ColumnWidth="10000">
+
+                <Section Tag="Overview">
+                    <Paragraph Style="{StaticResource H1}">Overview</Paragraph>
+                    <Paragraph>
+                        The Ribbon XML Editor edits the <Run Style="{StaticResource Code}">.ribbon</Run> files that define the ACCO Revit
+                        ribbon tabs (ConTech, Engineering BIM Team, Engineering Mechanical). Instead of hand-editing XML, you work in a
+                        tree with a property panel, and the editor checks the file against what Revit's RibbonBuilder will actually do
+                        with it before you save.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">What a .ribbon file is</Paragraph>
+                    <Paragraph>
+                        At Revit startup the tab add-in reads the single <Run Style="{StaticResource Code}">.ribbon</Run> file next to its
+                        DLL and builds the tab from it: panels, stacked items, buttons, pulldowns, combo boxes, text boxes, radio groups,
+                        split buttons, slide-outs and, since RibbonBuilder 3.1, dockable panes. Captions, tooltips, images and the command
+                        class behind every button all come from this file, so layout changes need no recompiling.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Two copies of every file</Paragraph>
+                    <Table>
+                        <!-- Star proportions only: WPF Table scales mixed fixed/star widths proportionally, which collapses the star column. -->
+                        <Table.Columns>
+                            <TableColumn Width="2*" />
+                            <TableColumn Width="5*" />
+                            <TableColumn Width="3*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Copy</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Where</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Who reads it</Paragraph></TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell><Paragraph>Source of truth</Paragraph></TableCell>
+                                <TableCell><Paragraph><Run Style="{StaticResource Code}">BTT_ACCORevit-Ribbons\0N.&lt;Tab&gt;_Tab\0N.&lt;Tab&gt;_Tab.ribbon</Run></Paragraph></TableCell>
+                                <TableCell><Paragraph>The build and the MSI installer</Paragraph></TableCell>
+                            </TableRow>
+                            <TableRow>
+                                <TableCell><Paragraph>Deployed copy</Paragraph></TableCell>
+                                <TableCell><Paragraph><Run Style="{StaticResource Code}">C:\ACCORevit\ACCO\ACCORevit ADDINS\02-ACCORevit Ribbons\&lt;Tab&gt;\&lt;year&gt;\</Run></Paragraph></TableCell>
+                                <TableCell><Paragraph>Revit, once, at startup</Paragraph></TableCell>
+                            </TableRow>
+                        </TableRowGroup>
+                    </Table>
+                    <Paragraph Style="{StaticResource Note}">
+                        Every add-in deployment (MSI install or a developer build of the tab project) copies the repository file over the
+                        deployed one. Edits made to a deployed copy last only until the next deployment. The editor shows a yellow notice and
+                        a bold status-bar path whenever the open file is under <Run Style="{StaticResource Code}">C:\ACCORevit\</Run>.
+                        See the topic <Italic>Getting changes into Revit</Italic>.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">The window</Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Document tabs</Bold> across the top: each open file has its own tab with its own tree, property panel, issues and preview.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Tree</Bold> on the left: the structure of the file.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Property panel</Bold> on the right: every attribute of the selected item.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Issues</Bold> and <Bold>Ribbon preview</Bold> tabs at the bottom.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Status bar</Bold>: the file path, the issue count, and which tab DLL is loaded for class names.</Paragraph></ListItem>
+                    </List>
+                </Section>
+
+                <Section Tag="Opening and saving files">
+                    <Paragraph Style="{StaticResource H1}">Opening and saving files</Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Opening</Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>File &#8250; Open</Bold> (Ctrl+O), <Bold>File &#8250; Open Recent</Bold>, dropping <Run Style="{StaticResource Code}">.ribbon</Run> files onto the window, or <Italic>Open with</Italic> from Explorer.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>File &#8250; New</Bold> (Ctrl+N) starts a tab with one panel, one stack and one button.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>File &#8250; New from Template</Bold> starts from <Run Style="{StaticResource Code}">ButtonStructureTemplate.ribbon</Run>, which shows every element type, including a disabled dockable pane example.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Opening a file that is already open switches to its tab. Close a tab with its <Run>&#x2715;</Run>, a middle-click, Ctrl+W, or right-click the tab for <Italic>Close Others</Italic> / <Italic>Close All</Italic>.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph>
+                        On load the editor reports anything it had to repair or drop: a missing attribute (added empty on save), an unknown
+                        attribute (kept as-is), a comment that is not a disabled item, or loose text. These appear as warnings whose rule
+                        names start with <Run Style="{StaticResource Code}">load.</Run> and the tab is marked modified so the repaired
+                        file can be saved.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Saving</Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Save</Bold> (Ctrl+S), <Bold>Save As</Bold> (Ctrl+Shift+S), <Bold>Save All</Bold>. Closing the window prompts once per tab with unsaved changes.</Paragraph></ListItem>
+                        <ListItem><Paragraph>The previous file is backed up first (last 20 per file, <Bold>File &#8250; Open Backups Folder</Bold>), then the new content is written to a temporary file and renamed into place, so a half-written file never sits next to the tab DLL.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Saving with errors asks for confirmation. Saving into a folder that already holds another <Run Style="{StaticResource Code}">.ribbon</Run> warns you, because Revit loads only the first one it finds.</Paragraph></ListItem>
+                        <ListItem><Paragraph>The file is written as UTF-8 without BOM, Windows line endings, one attribute per line, two-space indent, and <Bold>every attribute an element supports is always written</Bold>, empty if unused. Builders before 3.0 crash on a missing attribute.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource Tip}">
+                        The first save of a hand-written production file re-indents it. The content is unchanged; a round-trip test in the
+                        editor's test suite proves that for every production file.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="The tree">
+                    <Paragraph Style="{StaticResource H1}">The tree</Paragraph>
+                    <Paragraph>
+                        The tree shows Tab &#8250; Panel &#8250; structure &#8250; items. A coloured glyph marks the kind of each row and a red or
+                        orange dot marks rows that contain errors or warnings. Disabled items are shown grey and italic.
+                    </Paragraph>
+                    <Table>
+                        <Table.Columns>
+                            <TableColumn Width="1*" />
+                            <TableColumn Width="3*" />
+                            <TableColumn Width="9*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Glyph</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Kind</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>What it is</Paragraph></TableCell>
+                            </TableRow>
+                            <TableRow><TableCell><Paragraph>TAB</Paragraph></TableCell><TableCell><Paragraph>Tab</Paragraph></TableCell><TableCell><Paragraph>The one ribbon tab a file defines. Also holds the file header (version and date).</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>DP</Paragraph></TableCell><TableCell><Paragraph>Dockable pane</Paragraph></TableCell><TableCell><Paragraph>A pane registered at startup (RibbonBuilder 3.1). Directly under the tab, no children. See <Italic>Dockable panes</Italic>.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>PNL</Paragraph></TableCell><TableCell><Paragraph>Panel</Paragraph></TableCell><TableCell><Paragraph>A titled group of items.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#8801;</Paragraph></TableCell><TableCell><Paragraph>Stacked items</Paragraph></TableCell><TableCell><Paragraph>1 to 3 items. One item is shown large; two or three are stacked as small rows. Revit skips a stack with 0 or more than 3 items.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#8863;</Paragraph></TableCell><TableCell><Paragraph>Split button</Paragraph></TableCell><TableCell><Paragraph>A large button whose lower half lists alternative buttons. Only one per panel with builders before 3.0.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#9662;</Paragraph></TableCell><TableCell><Paragraph>Slide-out</Paragraph></TableCell><TableCell><Paragraph>Buttons hidden behind the panel title; they appear when the title is clicked.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#9673;</Paragraph></TableCell><TableCell><Paragraph>Radio group</Paragraph></TableCell><TableCell><Paragraph>Toggle buttons where only one is active.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>|</Paragraph></TableCell><TableCell><Paragraph>Separator</Paragraph></TableCell><TableCell><Paragraph>A vertical divider line.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>B</Paragraph></TableCell><TableCell><Paragraph>Button</Paragraph></TableCell><TableCell><Paragraph>A push button that runs a command class.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#9660;</Paragraph></TableCell><TableCell><Paragraph>Pulldown</Paragraph></TableCell><TableCell><Paragraph>A drop-down listing several buttons.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#9776; / &#9645;</Paragraph></TableCell><TableCell><Paragraph>Combo box / Text box</Paragraph></TableCell><TableCell><Paragraph>Input items; their selection or Enter handling is coded in the add-in.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>&#8226; / &#9680;</Paragraph></TableCell><TableCell><Paragraph>Combo member / Toggle button</Paragraph></TableCell><TableCell><Paragraph>Entries of a combo box or a radio group.</Paragraph></TableCell></TableRow>
+                        </TableRowGroup>
+                    </Table>
+                    <Paragraph Style="{StaticResource H2}">Adding items</Paragraph>
+                    <Paragraph>
+                        Select a row and use the <Bold>Items</Bold> buttons in the property panel, or right-click the row and open
+                        <Bold>Add</Bold>. Only what Revit accepts at that place is offered, and an option is greyed out when the container is
+                        full (three stacked items). A new item is selected immediately so you can fill it in.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Right-click menu and keys</Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Duplicate</Bold> (Ctrl+D) inserts a copy after the item, with " Copy" added to its name.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Disable</Bold> / <Bold>Enable</Bold> (Ctrl+E) keeps an item in the file but makes Revit skip it. See below.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Move Up</Bold> / <Bold>Move Down</Bold> (Alt+&#8593; / Alt+&#8595;) reorder within the same parent.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Delete</Bold> (Del) removes the item; a container with children asks first.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Add dockable toggle</Bold> on a panel creates a pane and its launcher button in one step. See <Italic>Dockable panes</Italic>.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource H2}">Drag and drop</Paragraph>
+                    <Paragraph>
+                        Drag any row except the tab. While dragging, each row is split into three zones:
+                    </Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Upper edge</Bold>: drop <Italic>before</Italic> that row. A blue line with a small arrow shows the insertion point.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Lower edge</Bold>: drop <Italic>after</Italic> that row.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Middle of a container</Bold> (panel, stack, pulldown, split button, slide-out, radio group, combo box): append <Italic>inside</Italic> it. The container is outlined in blue.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph>
+                        So a button can move to another stack or another panel's stack, a stack to another panel, and a panel or pane
+                        anywhere on the tab. A drop that Revit's parser would reject shows the "not allowed" cursor and does nothing: a button
+                        directly in a panel, a fourth item in a stack, an item into its own children, or a pane anywhere but the tab. The
+                        tree scrolls when you drag near its top or bottom edge. Moving an item out of a stack can leave the stack empty; the
+                        Issues list then flags it, and you can delete it or drop something else into it.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Disabling an item</Paragraph>
+                    <Paragraph>
+                        A disabled item stays in the file as an XML comment holding its block, so Revit skips it and it can be brought back
+                        later with <Bold>Enable</Bold> or the <Bold>Enabled in Revit</Bold> check box. Children of a disabled container are
+                        disabled with it. The tree shows disabled items grey, the preview shows them ghosted, and the validator does not
+                        check them (except for "--", which cannot appear inside an XML comment and is softened to "- -").
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource Note}">
+                        Builders before 3.0 count a comment as one of the 1 to 3 stacked items. With an older builder deployed, keep enabled
+                        plus disabled items in a stack at three or fewer; the validator warns when that matters.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="The property panel">
+                    <Paragraph Style="{StaticResource H1}">The property panel</Paragraph>
+                    <Paragraph>
+                        The panel edits the selected item. Every attribute Revit reads is shown, required ones are marked with a red
+                        <Run Foreground="#D32F2F">*</Run>, and a hint under each field explains it. Edits are applied as you type; the
+                        tree, preview and issues follow a moment later.
+                    </Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Captions and tooltips</Bold> accept Enter for a line break. Revit shows the break, and the file keeps it as a real line break inside the quotes, exactly as the production files do.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Image fields</Bold> (16x16 image, 32x32 large image, 192x192 tooltip image) have Browse (opens in the Images folder), a thumbnail, Clear, and a red ? when the file is missing on this computer. Picking <Run Style="{StaticResource Code}">Name_16x16.png</Run> offers to fill the empty 32x32 and 192x192 siblings. Paths must be absolute.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Command class</Bold> is an editable drop-down listing every <Run Style="{StaticResource Code}">IExternalCommand</Run> class in the tab DLL. The DLL is detected automatically when a <Run Style="{StaticResource Code}">*_Tab.dll</Run> sits next to the ribbon (the deployed folder); otherwise use <Bold>Tools &#8250; Select Tab DLL</Bold> or the button under the field, and <Bold>Tools &#8250; Rescan DLL</Bold> after a rebuild. The DLL is read as metadata only, so it works without Revit installed and for every Revit year.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Help URL</Bold> must be an absolute http(s) address; Open tries it in the browser.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Show image as button</Bold> and <Bold>Start hidden</Bold> are check boxes that write exactly <Run Style="{StaticResource Code}">true</Run> or nothing.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Enabled in Revit</Bold> at the top is the Disable / Enable switch.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Tab node</Bold>: also edits the file header comment <Run Style="{StaticResource Code}">&lt;!-- Version x.y.z yyyy-mm-dd --&gt;</Run> (Today sets the date) and shows any other leading comments, which are kept untouched.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource Tip}">
+                        A field with a problem gets an orange (warning) or red (error) border and the message appears under it. Double-click
+                        an issue in the Issues list to jump straight to the field.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="Dockable panes">
+                    <Paragraph Style="{StaticResource H1}">Dockable panes</Paragraph>
+                    <Paragraph>
+                        A dockable pane is a window like Revit's Project Browser. Since RibbonBuilder 3.1 a pane is declared in the
+                        <Run Style="{StaticResource Code}">.ribbon</Run> file with a <Run Style="{StaticResource Code}">&lt;dockablepane&gt;</Run>
+                        element directly under the tab, and the builder registers it at startup from a class that implements
+                        <Run Style="{StaticResource Code}">IDockablePaneProvider</Run>. The pane's GUID lives only in the file; the add-in's
+                        startup code does not change.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource Note}">
+                        Declaring the pane only registers the window (it also appears in Revit's <Italic>View &#8250; User Interface</Italic> list).
+                        The launcher on the ribbon is an ordinary <Bold>button</Bold> whose command class shows or hides the pane. A pane
+                        without a button is reachable only from that list.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Fields</Paragraph>
+                    <Table>
+                        <Table.Columns>
+                            <TableColumn Width="1*" />
+                            <TableColumn Width="5*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow><TableCell Style="{StaticResource Th}"><Paragraph>Field</Paragraph></TableCell><TableCell Style="{StaticResource Th}"><Paragraph>Meaning</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Name *</Paragraph></TableCell><TableCell><Paragraph>The key a command uses to find the pane (<Run Style="{StaticResource Code}">RibbonBuilder.TryGetDockablePane(name)</Run>). Case-insensitive, unique per file.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>GUID *</Paragraph></TableCell><TableCell><Paragraph>The pane's identity in Revit. <Bold>New</Bold> generates one. Keep it stable once deployed: Revit remembers the pane's docked position by it, and a pane another add-in already registered under the same GUID is reused rather than registered twice.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Title</Paragraph></TableCell><TableCell><Paragraph>Caption in the pane header and in Revit's View &#8250; User Interface list. Defaults to the name.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Pane class *</Paragraph></TableCell><TableCell><Paragraph>Full name of a public class implementing <Run Style="{StaticResource Code}">IDockablePaneProvider</Run> with a constructor taking <Run Style="{StaticResource Code}">UIControlledApplication</Run> or no parameters. The drop-down lists such classes from the tab DLL <Bold>and</Bold> <Run Style="{StaticResource Code}">RevitRibbon_MainSourceCode_Resources.dll</Run> next to it, which is where ACCO's panes live.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Start hidden</Paragraph></TableCell><TableCell><Paragraph>Hide the pane on the first view activation of the session (Revit shows a newly registered pane). The usual setting when a button toggles the pane.</Paragraph></TableCell></TableRow>
+                        </TableRowGroup>
+                    </Table>
+                    <Paragraph Style="{StaticResource H2}">Two ways to add one</Paragraph>
+                    <List>
+                        <ListItem><Paragraph><Bold>Add dockable toggle</Bold> on a <Italic>panel</Italic> node (Items row or right-click menu) creates both entries at once: the pane on the tab (named <Run Style="{StaticResource Code}">NewPane</Run>, fresh GUID, starts hidden) and a large button <Run Style="{StaticResource Code}">btn_NewPane</Run> in a new stack in that panel. Then pick the pane class on the pane and the command class and images on the button. The Issues list shows what is still empty.</Paragraph></ListItem>
+                        <ListItem><Paragraph><Bold>Add dockable pane</Bold> on the <Italic>tab</Italic> node creates the pane alone, for example when the launcher button already exists or belongs to another tab.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph>
+                        In the preview, panes are not ribbon items, so they appear as dashed chips in a <Italic>Dockable panes</Italic> strip under
+                        the panels. The command behind the launcher button is written in C# in the tab solution; for the ACCO Docs library it
+                        is <Run Style="{StaticResource Code}">Cmd_ACCODocs</Run>, which toggles the pane named
+                        <Run Style="{StaticResource Code}">ACCODocsLibrary</Run>.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="Issues and validation">
+                    <Paragraph Style="{StaticResource H1}">Issues and validation</Paragraph>
+                    <Paragraph>
+                        The Issues tab updates as you type. <Bold>Errors</Bold> mean Revit will throw, crash, or silently truncate the
+                        ribbon; <Bold>warnings</Bold> mean it works but something looks wrong. Double-click an issue to jump to the item and
+                        field. Disabled items are not validated.
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Errors</Paragraph>
+                    <List>
+                        <ListItem><Paragraph>A required attribute is empty.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Stacked items with 0 or more than 3 enabled items (Revit skips the stack; older builders stop reading the rest of the panel).</Paragraph></ListItem>
+                        <ListItem><Paragraph>An element where Revit does not accept it, for example a button directly in a panel or a pane inside a panel.</Paragraph></ListItem>
+                        <ListItem><Paragraph>An image path that is relative, or a file that does not exist (downgraded to a warning when the Images folder is not installed on this computer).</Paragraph></ListItem>
+                        <ListItem><Paragraph>A help URL that is not an absolute http(s) address.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Duplicate item names within a panel or container, duplicate panel names, duplicate dockable pane names (case-insensitive).</Paragraph></ListItem>
+                        <ListItem><Paragraph>More than one split button per panel (builders before 3.0 give them the same internal name).</Paragraph></ListItem>
+                        <ListItem><Paragraph>A dockable pane GUID that cannot be parsed.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource H2}">Warnings</Paragraph>
+                    <List>
+                        <ListItem><Paragraph>A class name that does not look like <Run Style="{StaticResource Code}">Namespace.Class</Run>, or is not found in the scanned DLL(s).</Paragraph></ListItem>
+                        <ListItem><Paragraph>An empty pulldown, combo box, radio group, split button or slide-out.</Paragraph></ListItem>
+                        <ListItem><Paragraph>An image whose file name says a different size than the field expects (image = 16x16, large image = 32x32, tooltip image = 192x192).</Paragraph></ListItem>
+                        <ListItem><Paragraph>A flag that is not exactly <Run Style="{StaticResource Code}">true</Run>.</Paragraph></ListItem>
+                        <ListItem><Paragraph>A pane GUID in a non-canonical format, all zeros (a placeholder), or shared by two panes in the file.</Paragraph></ListItem>
+                        <ListItem><Paragraph>A stack whose enabled plus disabled items exceed three (older builders count comments), or whose items are all disabled.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Comments, unknown elements or loose text dropped on load; an unknown attribute kept as-is.</Paragraph></ListItem>
+                        <ListItem><Paragraph>A second <Run Style="{StaticResource Code}">.ribbon</Run> in the folder you are saving into.</Paragraph></ListItem>
+                    </List>
+                </Section>
+
+                <Section Tag="Ribbon preview">
+                    <Paragraph Style="{StaticResource H1}">Ribbon preview</Paragraph>
+                    <Paragraph>
+                        The <Bold>Ribbon preview</Bold> tab at the bottom draws a schematic of the tab as Revit lays it out: panels left to
+                        right with their titles underneath, a single stacked item large, two or three stacked items as small rows, pulldown
+                        and split-button arrows, combo and text boxes, radio groups, separators, and a chevron on the panel title that opens
+                        the slide-out row. Real button images are shown when the files exist; otherwise a coloured glyph stands in.
+                    </Paragraph>
+                    <List>
+                        <ListItem><Paragraph>Click any item to select it in the tree; the tree selection is outlined in blue in the preview.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Click an arrow to drop a pulldown, split or combo list and pick an entry.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Red and orange outlines follow the validator. Disabled items are ghosted.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Dockable panes appear as dashed chips in a strip under the panels, with "(starts hidden)" when set.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph>
+                        The preview is schematic: Revit's exact sizing, fonts and icon rendering differ, but the structure, order and
+                        large-versus-small layout match what the builder will create.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="Getting changes into Revit">
+                    <Paragraph Style="{StaticResource H1}">Getting changes into Revit</Paragraph>
+                    <Paragraph>
+                        Revit reads the deployed ribbon file once, during startup. The editor only writes the file you opened; it never
+                        copies anything. Two workflows:
+                    </Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Permanent change (the normal case)</Paragraph>
+                    <List>
+                        <ListItem><Paragraph>Open the <Bold>repository</Bold> copy, make the change, save.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Build the tab project for the Revit year you are testing. Its post-build step copies the ribbon and DLLs to the deployed folder for that year. Each year has its own deployed folder.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Restart Revit. A save while Revit is open changes nothing until the next launch.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Commit the repository copy. The MSI deploys it to users.</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource H2}">Quick experiment on one machine</Paragraph>
+                    <List>
+                        <ListItem><Paragraph>Open the <Bold>deployed</Bold> copy, save, restart Revit. No build needed.</Paragraph></ListItem>
+                        <ListItem><Paragraph>The next build or install overwrites it, so carry a change you keep into the repository copy (or copy the file back over it).</Paragraph></ListItem>
+                    </List>
+                    <Paragraph Style="{StaticResource Note}">
+                        The editor only changes XML. A new button still needs its command class compiled into the tab DLL, and a pane needs its
+                        class in the Resources DLL. The class pickers list what the compiled DLLs actually contain, so an unknown class is
+                        flagged before Revit reports it at startup.
+                    </Paragraph>
+                </Section>
+
+                <Section Tag="Keyboard shortcuts">
+                    <Paragraph Style="{StaticResource H1}">Keyboard shortcuts</Paragraph>
+                    <Table>
+                        <Table.Columns>
+                            <TableColumn Width="1*" />
+                            <TableColumn Width="3*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow><TableCell Style="{StaticResource Th}"><Paragraph>Keys</Paragraph></TableCell><TableCell Style="{StaticResource Th}"><Paragraph>Action</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+N</Paragraph></TableCell><TableCell><Paragraph>New file</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+O</Paragraph></TableCell><TableCell><Paragraph>Open</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+S / Ctrl+Shift+S</Paragraph></TableCell><TableCell><Paragraph>Save / Save As</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+W</Paragraph></TableCell><TableCell><Paragraph>Close the active tab</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Del</Paragraph></TableCell><TableCell><Paragraph>Delete the selected item (tree focused)</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+D</Paragraph></TableCell><TableCell><Paragraph>Duplicate the selected item</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Ctrl+E</Paragraph></TableCell><TableCell><Paragraph>Disable / Enable the selected item</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Alt+&#8593; / Alt+&#8595;</Paragraph></TableCell><TableCell><Paragraph>Move the selected item up / down within its parent</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Enter (in a caption or tooltip)</Paragraph></TableCell><TableCell><Paragraph>Line break</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>F1</Paragraph></TableCell><TableCell><Paragraph>This documentation</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Esc (in this window)</Paragraph></TableCell><TableCell><Paragraph>Close the documentation</Paragraph></TableCell></TableRow>
+                        </TableRowGroup>
+                    </Table>
+                </Section>
+
+                <Section Tag="File format reference">
+                    <Paragraph Style="{StaticResource H1}">File format reference</Paragraph>
+                    <Paragraph>
+                        A <Run Style="{StaticResource Code}">.ribbon</Run> file is XML: a root <Run Style="{StaticResource Code}">&lt;tab&gt;</Run>,
+                        then panels and panes, then the structures below. Attribute names are lower-case. Every attribute an element supports
+                        should be present, empty if unused; the editor always writes all of them. The format has no XSD: it is exactly what
+                        <Run Style="{StaticResource Code}">RibbonBuilder.cs</Run> parses, and the editor's schema table is kept in sync with it by a test.
+                    </Paragraph>
+                    <Table>
+                        <Table.Columns>
+                            <TableColumn Width="2*" />
+                            <TableColumn Width="6*" />
+                            <TableColumn Width="4*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Element</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Attributes (* required)</Paragraph></TableCell>
+                                <TableCell Style="{StaticResource Th}"><Paragraph>Allowed children</Paragraph></TableCell>
+                            </TableRow>
+                            <TableRow><TableCell><Paragraph>tab</Paragraph></TableCell><TableCell><Paragraph>name*</Paragraph></TableCell><TableCell><Paragraph>panel, dockablepane</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>dockablepane</Paragraph></TableCell><TableCell><Paragraph>name*, guid*, title, classname*, startshidden</Paragraph></TableCell><TableCell><Paragraph>none (3.1+)</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>panel</Paragraph></TableCell><TableCell><Paragraph>name*</Paragraph></TableCell><TableCell><Paragraph>separator, stackeditems, splitbuttons, slideoutpanel, radiobuttons</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>separator</Paragraph></TableCell><TableCell><Paragraph>(none)</Paragraph></TableCell><TableCell><Paragraph>none</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>stackeditems</Paragraph></TableCell><TableCell><Paragraph>(none)</Paragraph></TableCell><TableCell><Paragraph>1 to 3 of: button, pulldownbuttons, combobox, textbox</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>splitbuttons</Paragraph></TableCell><TableCell><Paragraph>(none)</Paragraph></TableCell><TableCell><Paragraph>button</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>slideoutpanel</Paragraph></TableCell><TableCell><Paragraph>name</Paragraph></TableCell><TableCell><Paragraph>button</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>radiobuttons</Paragraph></TableCell><TableCell><Paragraph>name*</Paragraph></TableCell><TableCell><Paragraph>togglebutton</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>button</Paragraph></TableCell><TableCell><Paragraph>name*, classname*, text*, tooltip, image, largeimage, tooltipimage, contexthelp</Paragraph></TableCell><TableCell><Paragraph>none</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>pulldownbuttons</Paragraph></TableCell><TableCell><Paragraph>name*, image*</Paragraph></TableCell><TableCell><Paragraph>button</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>combobox</Paragraph></TableCell><TableCell><Paragraph>name*, itemtext, longdescription, tooltip, tooltipimage</Paragraph></TableCell><TableCell><Paragraph>comboboxmember</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>comboboxmember</Paragraph></TableCell><TableCell><Paragraph>name*, text*, image, groupname</Paragraph></TableCell><TableCell><Paragraph>none</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>textbox</Paragraph></TableCell><TableCell><Paragraph>name*, prompttext, longdescription, image, showimage, tooltip, tooltipimage</Paragraph></TableCell><TableCell><Paragraph>none</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>togglebutton</Paragraph></TableCell><TableCell><Paragraph>name*, text*, tooltip, largeimage</Paragraph></TableCell><TableCell><Paragraph>none</Paragraph></TableCell></TableRow>
+                        </TableRowGroup>
+                    </Table>
+                    <Paragraph Style="{StaticResource H2}">Example</Paragraph>
+                    <Paragraph Style="{StaticResource CodeBlock}" xml:space="preserve">&lt;?xml version="1.0" encoding="utf-8"?&gt;
+&lt;!-- Version 2.3.0 2026-10-09 --&gt;
+&lt;tab name="ENG Mechanical"&gt;
+  &lt;dockablepane name="ACCODocsLibrary" guid="ACC0D0C5-11B2-4A2B-9E77-3F1A6C5B2D41"
+                title="ACCO Link Library"
+                classname="RevitRibbon_MainSourceCode_Resources.Forms.LinkLibrary_Pane"
+                startshidden="true" /&gt;
+  &lt;panel name="Tools"&gt;
+    &lt;stackeditems&gt;
+      &lt;button name="btn_ACCODocs"
+              classname="RevitRibbon_MainSourceCode.Unique_Button_Classes.Mechanical.Cmd_ACCODocs"
+              text="ACCO Docs&#10;Library"
+              tooltip="" image="C:\...\Images\ACCODocs_16x16.png"
+              largeimage="C:\...\Images\ACCODocs_32x32.png"
+              tooltipimage="C:\...\Images\ACCODocs_192x192.png"
+              contexthelp="" /&gt;
+    &lt;/stackeditems&gt;
+  &lt;/panel&gt;
+&lt;/tab&gt;</Paragraph>
+                    <Paragraph Style="{StaticResource H2}">Rules worth knowing</Paragraph>
+                    <List>
+                        <ListItem><Paragraph>Item names must be unique within a panel; panel names unique within the tab; pane names unique per file.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Captions and tooltips may contain real line breaks inside the quotes. Never reformat the file with a tool that collapses them.</Paragraph></ListItem>
+                        <ListItem><Paragraph>A comment that holds exactly one element is a disabled item; any other comment inside the tab is dropped on load (with a warning).</Paragraph></ListItem>
+                        <ListItem><Paragraph>Revit loads only the first <Run Style="{StaticResource Code}">.ribbon</Run> it finds next to the DLL. Keep one per folder.</Paragraph></ListItem>
+                        <ListItem><Paragraph>Problems the builder finds at startup are listed once in a "Ribbon XML problems" dialog in Revit; the rest of the tab is still built.</Paragraph></ListItem>
+                    </List>
+                </Section>
+
+                <Section Tag="Settings and files">
+                    <Paragraph Style="{StaticResource H1}">Settings and files</Paragraph>
+                    <Table>
+                        <Table.Columns>
+                            <TableColumn Width="1*" />
+                            <TableColumn Width="2*" />
+                        </Table.Columns>
+                        <TableRowGroup>
+                            <TableRow><TableCell Style="{StaticResource Th}"><Paragraph>What</Paragraph></TableCell><TableCell Style="{StaticResource Th}"><Paragraph>Where</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Backups (last 20 per file)</Paragraph></TableCell><TableCell><Paragraph><Run Style="{StaticResource Code}">%LocalAppData%\RibbonXmlEditor\Backups\</Run> (File &#8250; Open Backups Folder)</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Settings (recent files, DLL per ribbon, images folder)</Paragraph></TableCell><TableCell><Paragraph><Run Style="{StaticResource Code}">%LocalAppData%\RibbonXmlEditor\settings.json</Run></Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Button images</Paragraph></TableCell><TableCell><Paragraph><Run Style="{StaticResource Code}">C:\ACCORevit\ACCO\ACCORevit ADDINS\02-ACCORevit Ribbons\Images\Name_16x16.png</Run> / _32x32 / _192x192. Change the folder with Tools &#8250; Set Images Folder.</Paragraph></TableCell></TableRow>
+                            <TableRow><TableCell><Paragraph>Version and paths</Paragraph></TableCell><TableCell><Paragraph>Help &#8250; About.</Paragraph></TableCell></TableRow>
+                        </TableRowGroup>
+                    </Table>
+                    <Paragraph>
+                        The editor runs without a .NET installation (self-contained single exe). On first run it extracts its native
+                        libraries to <Run Style="{StaticResource Code}">%TEMP%\.net\</Run>.
+                    </Paragraph>
+                </Section>
+
+            </FlowDocument>
+        </FlowDocumentScrollViewer>
+    </Grid>
+</Window>

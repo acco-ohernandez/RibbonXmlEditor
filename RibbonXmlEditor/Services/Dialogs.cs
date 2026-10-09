@@ -83,6 +83,9 @@ public static class Dialogs
 
     public static void Info(string message) => Show(message, MessageBoxButton.OK, MessageBoxImage.Information);
 
+    /// <summary>Opens the built-in manual (non-modal, one instance), optionally at a topic.</summary>
+    public static void ShowDocumentation(string? topic = null) => Views.DocumentationWindow.ShowOrActivate(Owner, topic);
+
     // ----------------------------------------------------------------------------------
 
     private static bool Show(CommonDialog dlg)

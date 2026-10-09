@@ -95,6 +95,26 @@ public sealed class RibbonNode
         return true;
     }
 
+    /// <summary>
+    /// Re-parents this node: removed from its current parent, inserted into <paramref name="newParent"/> at
+    /// <paramref name="index"/> (counted before the removal, so a same-parent move keeps the caller's view;
+    /// past the end = append). Schema rules are not checked here; see NodeViewModel.CanMoveTo.
+    /// </summary>
+    public void MoveTo(RibbonNode newParent, int index)
+    {
+        ArgumentNullException.ThrowIfNull(newParent);
+        var oldParent = Parent ?? throw new InvalidOperationException("The root node cannot be moved.");
+        if (ReferenceEquals(newParent, this) || newParent.Ancestors().Contains(this))
+            throw new InvalidOperationException("A node cannot be moved into itself.");
+
+        int from = oldParent._children.IndexOf(this);
+        oldParent._children.RemoveAt(from);
+        Parent = null;
+        if (ReferenceEquals(oldParent, newParent) && index > from)
+            index--;
+        newParent.AddChild(this, index);
+    }
+
     public RibbonNode DeepClone()
     {
         var copy = new RibbonNode(Kind) { IsDisabled = IsDisabled };

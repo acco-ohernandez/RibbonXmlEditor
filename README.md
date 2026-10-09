@@ -39,7 +39,12 @@ with it before you save.
    nodes (`DP`, builder 3.1+) directly under the tab.
    Right-click for **Add / Duplicate / Disable / Move Up / Move Down / Delete** (`Del`, `Alt+↑/↓`,
    `Ctrl+D`, `Ctrl+E`). The *Add* menu only offers what Revit accepts there and disables at the limit
-   (3 stacked items). **Disable** keeps an item in the file as an XML comment so Revit skips it; the
+   (3 stacked items). **Drag and drop** reorders anything but the tab: drop on the upper or lower
+   edge of a row to place the item before or after it, or onto the middle of a container to append
+   it there (a button into another stack, a stack into another panel, a panel or pane elsewhere on
+   the tab). A blue line shows where it will land; a drop the parser would reject (a button straight
+   into a panel, a fourth stacked item, an item into its own children) shows the "not allowed" cursor
+   and does nothing. **Disable** keeps an item in the file as an XML comment so Revit skips it; the
    tree shows it grey, the preview shows it ghosted, and **Enable** brings it back.
 3. The **property panel** on the right edits the selected item. Every attribute Revit reads is shown;
    required ones are marked `*`. Captions and tooltips accept `Enter` for a line break, exactly as
@@ -70,6 +75,11 @@ with it before you save.
    appear as dashed chips in a *Dockable panes* strip under the panels, with "(starts hidden)" when set.
 6. **Save** (`Ctrl+S`) backs the previous file up, then writes atomically (temp file + rename).
    Closing the window prompts once for each tab with unsaved changes.
+7. **Help → Documentation** (`F1`) opens the built-in manual: a topic list beside a formatted
+   document covering every feature above, the validator rules, the deployment workflow, keyboard
+   shortcuts and the file format reference. It lives in `Views\DocumentationWindow.xaml` as a
+   FlowDocument; a test checks it names every element and attribute of the schema, so update it
+   when the format or a feature changes.
 
 The first save of a hand-written production file re-indents it (one attribute per line, two-space
 indent). Content is unchanged; the round-trip test proves it.

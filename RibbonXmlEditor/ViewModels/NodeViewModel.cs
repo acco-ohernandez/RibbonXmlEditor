@@ -44,7 +44,7 @@ public sealed class NodeViewModel : ObservableObject
 
     public RibbonNode Node { get; }
     public DocumentViewModel Doc { get; }
-    public NodeViewModel? Parent { get; }
+    public NodeViewModel? Parent { get; private set; }
     public ObservableCollection<NodeViewModel> Children { get; }
     public IReadOnlyList<FieldViewModel> Fields { get; }
     public IReadOnlyList<AddChildOption> AddChildOptions { get; }
@@ -413,7 +413,7 @@ public sealed class NodeViewModel : ObservableObject
         Doc.MarkChanged();
     }
 
-    private void ChildrenChanged()
+    internal void ChildrenChanged()
     {
         OnPropertyChanged(nameof(Header));
         OnPropertyChanged(nameof(FirstChild));
@@ -539,6 +539,73 @@ public sealed class NodeViewModel : ObservableObject
         Parent.Children.Move(from, from + delta);
         Parent.ChildrenChanged();
         IsSelected = true;
+    }
+
+    // ---- drag and drop ---------------------------------------------------------------
+
+    /// <summary>
+    /// Why this node cannot be dropped into <paramref name="newParent"/> at <paramref name="index"/>, or null when
+    /// it can. Mirrors what the parser accepts: the parent must allow the element, a container cannot exceed its
+    /// item limit (3 stacked items), and nothing moves into itself. The tab never moves.
+    /// </summary>
+    public string? MoveBlockedReason(NodeViewModel newParent, int index)
+    {
+        ArgumentNullException.ThrowIfNull(newParent);
+        if (Parent is null)
+            return "The tab cannot be moved.";
+        if (ReferenceEquals(newParent, this) || newParent.Ancestors().Contains(this))
+            return "An item cannot be moved into itself.";
+        if (!newParent.Def.Allows(Node.Kind))
+        {
+            var allowed = newParent.Def.AllowedChildren.Count == 0
+                ? "nothing"
+                : string.Join(", ", newParent.Def.AllowedChildren.Select(k => RibbonSchema.ByKind(k).DisplayName.ToLowerInvariant()));
+            return $"A {Def.DisplayName.ToLowerInvariant()} cannot go inside a {newParent.Def.DisplayName.ToLowerInvariant()} (accepts: {allowed}).";
+        }
+        if (!ReferenceEquals(newParent, Parent) && newParent.Children.Count >= newParent.Def.MaxChildren)
+            return $"{newParent.Def.DisplayName} already holds its maximum of {newParent.Def.MaxChildren} items.";
+        return null;
+    }
+
+    public bool CanMoveTo(NodeViewModel newParent, int index) => MoveBlockedReason(newParent, index) is null;
+
+    /// <summary>
+    /// Moves this node (with its subtree and tree state) into <paramref name="newParent"/> at <paramref name="index"/>,
+    /// counted among the parent's current children before the move (past the end = append). Selects the moved node.
+    /// Returns false when nothing changed (illegal move, or dropped where it already is).
+    /// </summary>
+    public bool MoveTo(NodeViewModel newParent, int index)
+    {
+        if (MoveBlockedReason(newParent, index) is not null)
+            return false;
+
+        var oldParent = Parent!;
+        int from = Node.IndexInParent;
+
+        if (ReferenceEquals(oldParent, newParent))
+        {
+            int to = Math.Clamp(index > from ? index - 1 : index, 0, oldParent.Children.Count - 1);
+            if (to == from)
+                return false;
+            Node.MoveTo(newParent.Node, index);
+            oldParent.Children.Move(from, to);
+            oldParent.ChildrenChanged();
+        }
+        else
+        {
+            Node.MoveTo(newParent.Node, index);
+            oldParent.Children.RemoveAt(from);
+            Parent = newParent;
+            newParent.Children.Insert(Math.Clamp(index, 0, newParent.Children.Count), this);
+            oldParent.ChildrenChanged();
+            newParent.ChildrenChanged();
+            foreach (var d in DescendantsAndSelf())
+                d.NotifyEffectiveDisabledChanged();
+        }
+
+        ExpandAncestors();
+        IsSelected = true;
+        return true;
     }
 
     /// <summary>
