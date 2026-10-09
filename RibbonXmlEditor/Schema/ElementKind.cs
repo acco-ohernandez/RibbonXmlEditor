@@ -16,4 +16,5 @@ public enum ElementKind
     TextBox,
     ComboBoxMember,
     ToggleButton,
+    DockablePane,
 }

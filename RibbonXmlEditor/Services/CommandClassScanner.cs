@@ -7,16 +7,45 @@ namespace RibbonXmlEditor.Services;
 public sealed record ScanResult(IReadOnlyList<string> ClassNames, string? Error);
 
 /// <summary>
-/// Lists the public, concrete classes in a Revit tab DLL that implement
-/// <c>Autodesk.Revit.UI.IExternalCommand</c>, by reading metadata only. The DLL is never loaded,
-/// so RevitAPIUI.dll does not need to be present and net48 / net8 / net10 builds all work.
+/// Lists the public, concrete classes in a Revit add-in DLL that implement an <c>Autodesk.Revit.UI</c>
+/// interface, by reading metadata only. The DLL is never loaded, so RevitAPIUI.dll does not need to be
+/// present and net48 / net8 / net10 builds all work.
+/// <see cref="Scan"/> finds <c>IExternalCommand</c> classes (ribbon buttons);
+/// <see cref="ScanPaneProviders"/> finds <c>IDockablePaneProvider</c> classes (dockable panes).
 /// </summary>
 public static class CommandClassScanner
 {
-    private const string InterfaceName = "IExternalCommand";
+    private const string CommandInterface = "IExternalCommand";
+    private const string PaneProviderInterface = "IDockablePaneProvider";
     private const string InterfaceNamespace = "Autodesk.Revit.UI";
 
-    public static ScanResult Scan(string dllPath)
+    /// <summary>File name of the shared class library that sits next to every ACCO tab DLL and holds the pane classes.</summary>
+    public const string ResourcesDllName = "RevitRibbon_MainSourceCode_Resources.dll";
+
+    /// <summary>Public concrete <c>IExternalCommand</c> classes, sorted.</summary>
+    public static ScanResult Scan(string dllPath) => ScanFor(dllPath, CommandInterface);
+
+    /// <summary>Public concrete <c>IDockablePaneProvider</c> classes, sorted.</summary>
+    public static ScanResult ScanPaneProviders(string dllPath) => ScanFor(dllPath, PaneProviderInterface);
+
+    /// <summary>
+    /// The DLLs that may hold a <c>&lt;dockablepane classname&gt;</c>: the tab DLL itself and, when present,
+    /// <see cref="ResourcesDllName"/> in the same folder (the parser resolves the class through the tab DLL's references).
+    /// </summary>
+    public static IReadOnlyList<string> PaneDllsFor(string tabDllPath)
+    {
+        var list = new List<string> { tabDllPath };
+        var dir = Path.GetDirectoryName(tabDllPath);
+        if (dir is not null)
+        {
+            var resources = Path.Combine(dir, ResourcesDllName);
+            if (File.Exists(resources) && !string.Equals(resources, tabDllPath, StringComparison.OrdinalIgnoreCase))
+                list.Add(resources);
+        }
+        return list;
+    }
+
+    private static ScanResult ScanFor(string dllPath, string interfaceName)
     {
         try
         {
@@ -50,7 +79,7 @@ public static class CommandClassScanner
                 if (md.GetString(type.Name).Contains('`'))
                     continue; // generic
 
-                if (ImplementsExternalCommand(md, type, depth: 0))
+                if (Implements(md, type, interfaceName, depth: 0))
                     names.Add(FullName(md, type));
             }
 
@@ -63,7 +92,7 @@ public static class CommandClassScanner
         }
     }
 
-    private static bool ImplementsExternalCommand(MetadataReader md, TypeDefinition type, int depth)
+    private static bool Implements(MetadataReader md, TypeDefinition type, string interfaceName, int depth)
     {
         foreach (var implHandle in type.GetInterfaceImplementations())
         {
@@ -71,13 +100,13 @@ public static class CommandClassScanner
             if (iface.Kind == HandleKind.TypeReference)
             {
                 var tr = md.GetTypeReference((TypeReferenceHandle)iface);
-                if (md.GetString(tr.Name) == InterfaceName && md.GetString(tr.Namespace) == InterfaceNamespace)
+                if (md.GetString(tr.Name) == interfaceName && md.GetString(tr.Namespace) == InterfaceNamespace)
                     return true;
             }
             else if (iface.Kind == HandleKind.TypeDefinition)
             {
                 var td = md.GetTypeDefinition((TypeDefinitionHandle)iface);
-                if (md.GetString(td.Name) == InterfaceName && md.GetString(td.Namespace) == InterfaceNamespace)
+                if (md.GetString(td.Name) == interfaceName && md.GetString(td.Namespace) == InterfaceNamespace)
                     return true;
             }
         }
@@ -86,7 +115,7 @@ public static class CommandClassScanner
         if (depth < 8 && !type.BaseType.IsNil && type.BaseType.Kind == HandleKind.TypeDefinition)
         {
             var baseType = md.GetTypeDefinition((TypeDefinitionHandle)type.BaseType);
-            return ImplementsExternalCommand(md, baseType, depth + 1);
+            return Implements(md, baseType, interfaceName, depth + 1);
         }
         return false;
     }

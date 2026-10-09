@@ -60,7 +60,11 @@ public class RoundTripTests
         Assert.Contains("Copied from", doc.OtherLeadingComments[0]);
         Assert.Equal(1, doc.VersionCommentPosition); // "Copied from" first, then Version
         Assert.Equal("ENG Mechanical", doc.Tab.Name);
-        Assert.Equal(4, doc.Tab.Children.Count);
+        // Since 2026-10-09: the ACCODocs dockable pane first, then the four panels.
+        Assert.Equal(5, doc.Tab.Children.Count);
+        Assert.Equal(ElementKind.DockablePane, doc.Tab.Children[0].Kind);
+        Assert.Equal("ACCODocsLibrary", doc.Tab.Children[0].Name);
+        Assert.Equal(4, doc.Tab.Children.Count(c => c.Kind == ElementKind.Panel));
     }
 
     [Fact]

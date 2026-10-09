@@ -370,6 +370,39 @@
             </Button>
         </DataTemplate>
 
+        <!-- Dockable pane: not a ribbon item. Drawn as a dashed chip in the strip under the panels (never inside the panel row). -->
+        <DataTemplate x:Key="Preview.DockablePane">
+            <Button Style="{StaticResource FlatButton}" Command="{Binding SelectCommand}" Margin="0,0,6,0" VerticalAlignment="Center">
+                <Border Style="{StaticResource SelectionRing}">
+                    <Grid>
+                        <Rectangle Stroke="#9A6FA0" StrokeDashArray="3 2" StrokeThickness="1" RadiusX="3" RadiusY="3" Fill="#F7F0F8">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding HasOwnWarning}" Value="True">
+                                            <Setter Property="Stroke" Value="{StaticResource WarningBrush}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding HasOwnError}" Value="True">
+                                            <Setter Property="Stroke" Value="{StaticResource ErrorBrush}" />
+                                            <Setter Property="StrokeThickness" Value="1.5" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Rectangle.Style>
+                        </Rectangle>
+                        <StackPanel Orientation="Horizontal" Margin="8,3">
+                            <TextBlock Text="⧉" FontSize="13" Foreground="#7B3F85" VerticalAlignment="Center" Margin="0,0,6,0" />
+                            <TextBlock Text="{Binding CaptionSingleLine}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                            <TextBlock Text=" (starts hidden)" Style="{StaticResource CaptionText}" FontStyle="Italic" Foreground="#707070"
+                                       VerticalAlignment="Center"
+                                       Visibility="{Binding IsStartsHidden, Converter={StaticResource BoolToVis}}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </Button>
+        </DataTemplate>
+
         <!-- Panel: items row, optional slide-out row, title bar with slide-out chevron. -->
         <DataTemplate x:Key="Preview.Panel">
             <Border Background="#F3F3F3" BorderBrush="#C6C6C6" BorderThickness="1" Margin="0,0,4,0">
@@ -455,7 +488,7 @@
                         </Border>
                     </Border>
                 </Button>
-                <!-- Panels -->
+                <!-- Panels (dockable panes are not ribbon items; they are hidden here and listed in the strip below) -->
                 <Border Background="#E9E9E9" BorderBrush="#C6C6C6" BorderThickness="1" Padding="4">
                     <ItemsControl ItemsSource="{Binding Root.Children}" ItemTemplateSelector="{StaticResource Selector}" Focusable="False">
                         <ItemsControl.ItemsPanel>
@@ -463,7 +496,42 @@
                                 <StackPanel Orientation="Horizontal" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemContainerStyle>
+                            <Style TargetType="ContentPresenter">
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Node.Kind}" Value="DockablePane">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.ItemContainerStyle>
                     </ItemsControl>
+                </Border>
+                <!-- Dockable panes strip: registered at startup, shown by a button command, so drawn apart from the ribbon -->
+                <Border Background="#F4F4F4" BorderBrush="#C6C6C6" BorderThickness="1,0,1,1" Padding="6,4"
+                        Visibility="{Binding Root.HasDockablePanes, Converter={StaticResource BoolToVis}}">
+                    <DockPanel>
+                        <TextBlock DockPanel.Dock="Left" Text="Dockable panes" Style="{StaticResource CaptionText}" FontStyle="Italic" Foreground="#707070"
+                                   VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <ItemsControl ItemsSource="{Binding Root.Children}" ItemTemplateSelector="{StaticResource Selector}" Focusable="False">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <StackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                    <Setter Property="VerticalAlignment" Value="Center" />
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Node.Kind}" Value="DockablePane">
+                                            <Setter Property="Visibility" Value="Visible" />
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                        </ItemsControl>
+                    </DockPanel>
                 </Border>
             </StackPanel>
         </ScrollViewer>

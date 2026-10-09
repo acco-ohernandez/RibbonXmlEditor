@@ -119,6 +119,14 @@
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>
                     </ItemsControl>
+                    <!-- Panel only: pane registration on the tab + launcher button here, in one step -->
+                    <StackPanel Visibility="{Binding CanAddDockableToggle, Converter={StaticResource BoolToVis}}" Margin="0,2,0,6">
+                        <Button Content="Add dockable toggle" Command="{Binding AddDockableToggleCommand}" Padding="10,4" HorizontalAlignment="Left"
+                                AutomationProperties.Name="Add dockable toggle"
+                                ToolTip="Adds a dockable pane to the tab and a launcher button to this panel" />
+                        <TextBlock FontSize="11" Foreground="#707070" TextWrapping="Wrap" Margin="0,3,0,0"
+                                   Text="Creates a dockable pane on the tab and a launcher button in this panel. Afterwards pick the pane class on the pane and the command class on the button." />
+                    </StackPanel>
                     <TextBlock Text="Right-click an item in the tree to duplicate, move or delete it." FontSize="11" Foreground="#707070" />
                 </StackPanel>
             </StackPanel>

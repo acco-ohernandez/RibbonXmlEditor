@@ -35,7 +35,8 @@ with it before you save.
    Close a tab with its ✕, a middle-click, `Ctrl+W` (**File → Close Loaded Ribbon**), or right-click
    the tab for *Close Others* / *Close All*. **File → Save All** saves every tab with changes.
 2. The **tree** on the left shows Tab → Panel → structure (Stacked items, Split button, Slide-out,
-   Radio group, Separator) → items (Button, Pulldown, Combo box, Text box, …).
+   Radio group, Separator) → items (Button, Pulldown, Combo box, Text box, …), plus **Dockable pane**
+   nodes (`DP`, builder 3.1+) directly under the tab.
    Right-click for **Add / Duplicate / Disable / Move Up / Move Down / Delete** (`Del`, `Alt+↑/↓`,
    `Ctrl+D`, `Ctrl+E`). The *Add* menu only offers what Revit accepts there and disables at the limit
    (3 stacked items). **Disable** keeps an item in the file as an XML comment so Revit skips it; the
@@ -48,6 +49,15 @@ with it before you save.
    - **Command class**: an editable drop-down. **Tools → Select Tab DLL…** (auto-detected when a
      `*_Tab.dll` sits next to the ribbon) lists every `IExternalCommand` class in the DLL. The DLL is
      read as metadata only, so it works on machines without Revit and with 2023–2027 builds alike.
+   - **Dockable pane** (*Add → Dockable pane* on the tab node): `name`, a **GUID** field with a *New*
+     button, `title`, the **Pane class** drop-down and a *Start hidden* check box. The pane-class list
+     comes from scanning the tab DLL **and** `RevitRibbon_MainSourceCode_Resources.dll` next to it
+     for `IDockablePaneProvider` classes, so it is separate from the command-class list.
+     A pane element only registers the window; the launcher is an ordinary button whose command
+     class toggles it. **Add dockable toggle** on a *panel* node (Items row, or the tree's right-click
+     menu) creates both at once: the pane on the tab (`NewPane`, fresh GUID, starts hidden) and a
+     large button `btn_NewPane` in a new stack in that panel. Then pick the pane class on the pane
+     and the command class plus images on the button; the Issues list shows what is still empty.
    - **Tab node**: also edits the file header (`<!-- Version x.y.z yyyy-mm-dd -->`).
 4. The **Issues** tab at the bottom updates as you type. Double-click an issue to jump to the field.
    *Errors* mean Revit will throw, crash, or silently truncate the panel; *warnings* mean it works
@@ -56,7 +66,8 @@ with it before you save.
    large, two or three stacked items as small rows, pulldown / split / combo arrows that drop their
    lists on click, and a chevron on the panel title for slide-outs. Click any item to select it in the
    tree; the tree selection is outlined in blue. Red and orange outlines follow the validator, and a
-   coloured glyph stands in for an empty or missing image.
+   coloured glyph stands in for an empty or missing image. Dockable panes are not ribbon items, so they
+   appear as dashed chips in a *Dockable panes* strip under the panels, with "(starts hidden)" when set.
 6. **Save** (`Ctrl+S`) backs the previous file up, then writes atomically (temp file + rename).
    Closing the window prompts once for each tab with unsaved changes.
 
@@ -68,12 +79,15 @@ indent). Content is unchanged; the round-trip test proves it.
 Errors: required attribute empty · stacked items not 1–3 (Revit stops reading the rest of the panel)
 · element not allowed in its parent · image path relative or file missing · help URL not http(s)
 · duplicate item name within a panel or container · duplicate panel name · more than one split
-button per panel.
+button per panel · dockable pane GUID not parseable · duplicate dockable pane name (case-insensitive,
+Revit builds only the first).
 
-Warnings: class name malformed or not found in the selected DLL · empty pulldown / combo / radio /
-split / slide-out · image size does not match the field (`image` = 16x16, `largeimage` = 32x32,
-`tooltipimage` = 192x192) · `showimage` not `"true"` · a second `*.ribbon` in the target folder
-(Revit loads only the first one it finds) · comments or unknown elements dropped on load.
+Warnings: class name malformed or not found in the selected DLL · pane class not found among the
+`IDockablePaneProvider` classes of the scanned DLLs · pane GUID in a non-canonical format, all zeros,
+or shared by two panes in the file · empty pulldown / combo / radio / split / slide-out · image size
+does not match the field (`image` = 16x16, `largeimage` = 32x32, `tooltipimage` = 192x192)
+· `showimage` / `startshidden` not `"true"` · a second `*.ribbon` in the target folder (Revit loads only
+the first one it finds) · comments or unknown elements dropped on load.
 
 ## Build, test, publish
 

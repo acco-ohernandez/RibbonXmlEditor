@@ -7,7 +7,11 @@ namespace RibbonXmlEditor.Services;
 /// <param name="KnownClasses">Command classes found in the tab DLL, or null when no DLL is loaded.</param>
 /// <param name="DllName">File name of the scanned DLL, for messages.</param>
 /// <param name="ImagesFolder">The ribbon Images folder; when it does not exist on this machine, missing-image errors become warnings.</param>
-public sealed record ValidationContext(IReadOnlySet<string>? KnownClasses, string? DllName, string ImagesFolder)
+/// <param name="KnownPaneClasses">
+/// IDockablePaneProvider classes found in the tab DLL and the Resources DLL next to it, or null when no pane scan has run.
+/// </param>
+public sealed record ValidationContext(IReadOnlySet<string>? KnownClasses, string? DllName, string ImagesFolder,
+    IReadOnlySet<string>? KnownPaneClasses = null)
 {
     public static ValidationContext Default { get; } = new(null, null, AppSettings.DefaultImagesFolder);
 }
@@ -108,11 +112,34 @@ public static partial class RibbonValidator
                     }
                     break;
 
+                case FieldKind.PaneClassName:
+                    if (!ClassNameRegex().IsMatch(value))
+                    {
+                        issues.Add(new Issue(IssueSeverity.Warning, "classname.format",
+                            "Class name should look like Namespace.SubNamespace.ClassName (letters, digits, underscores and dots).",
+                            node, attr.XmlName));
+                    }
+                    else if (ctx.KnownPaneClasses is not null && !ctx.KnownPaneClasses.Contains(value))
+                    {
+                        issues.Add(new Issue(IssueSeverity.Warning, "paneclass.unknown",
+                            $"No IDockablePaneProvider class with this name was found in {ctx.DllName ?? "the tab DLL"} or the Resources DLL next to it. Revit reports the problem at startup and skips the pane.",
+                            node, attr.XmlName));
+                    }
+                    break;
+
+                case FieldKind.Guid:
+                    ValidateGuid(node, attr, value, issues);
+                    break;
+
                 case FieldKind.TrueOrEmpty:
                     if (value != "true")
                     {
+                        // Builder 3.x compares case-insensitively (after trimming); the convention is a lower-case "true".
+                        bool trueAnyCase = string.Equals(value.Trim(), "true", StringComparison.OrdinalIgnoreCase);
                         issues.Add(new Issue(IssueSeverity.Warning, "flag.value",
-                            $"'{attr.Label}' must be exactly \"true\" or empty; Revit treats \"{value}\" as false.",
+                            trueAnyCase
+                                ? $"'{attr.Label}' should be written exactly as \"true\" (the check box does this); \"{value}\" works with builder 3.0+ only."
+                                : $"'{attr.Label}' must be exactly \"true\" or empty; Revit treats \"{value}\" as false.",
                             node, attr.XmlName));
                     }
                     break;
@@ -173,6 +200,11 @@ public static partial class RibbonValidator
             case ElementKind.Tab:
                 ReportDuplicates(enabled.Where(c => c.Kind == ElementKind.Panel), issues,
                     n => $"Panel name \"{n}\" is used more than once in this tab. Revit throws on duplicate panel names.");
+                // The parser's pane registry is case-insensitive: the second pane with the same name is reported and skipped.
+                ReportDuplicates(enabled.Where(c => c.Kind == ElementKind.DockablePane), issues,
+                    n => $"Dockable pane name \"{n}\" is used more than once in this tab; Revit builds only the first.",
+                    StringComparer.OrdinalIgnoreCase);
+                ReportDuplicateGuids(enabled.Where(c => c.Kind == ElementKind.DockablePane), issues);
                 break;
 
             case ElementKind.Panel:
@@ -237,14 +269,59 @@ public static partial class RibbonValidator
             n => $"Name \"{n}\" is used by more than one item in panel \"{panel.Name}\". Revit throws on duplicate item names within a panel.");
     }
 
-    private static void ReportDuplicates(IEnumerable<RibbonNode> nodes, List<Issue> issues, Func<string, string> message)
+    private static void ReportDuplicates(IEnumerable<RibbonNode> nodes, List<Issue> issues, Func<string, string> message,
+        StringComparer? comparer = null)
     {
         foreach (var group in nodes.Where(n => n.Def.HasAttribute("name") && n.Name.Trim().Length > 0)
-                                   .GroupBy(n => n.Name, StringComparer.Ordinal)
+                                   .GroupBy(n => n.Name.Trim(), comparer ?? StringComparer.Ordinal)
                                    .Where(g => g.Count() > 1))
         {
             foreach (var n in group)
                 issues.Add(new Issue(IssueSeverity.Error, "name.duplicate", message(group.Key), n, "name"));
+        }
+    }
+
+    /// <summary>
+    /// Two panes with the same GUID in one file: the parser registers the first and, for the second, finds the pane
+    /// already registered and records it under the second name without creating its class. Almost always a copy-paste slip.
+    /// </summary>
+    private static void ReportDuplicateGuids(IEnumerable<RibbonNode> panes, List<Issue> issues)
+    {
+        foreach (var group in panes.Select(n => (node: n, ok: Guid.TryParse(n["guid"].Trim(), out var g), guid: g))
+                                   .Where(x => x.ok && x.guid != Guid.Empty)
+                                   .GroupBy(x => x.guid)
+                                   .Where(g => g.Count() > 1))
+        {
+            foreach (var (node, _, _) in group)
+            {
+                issues.Add(new Issue(IssueSeverity.Warning, "guid.duplicate",
+                    "Another dockable pane in this tab has the same GUID. Revit registers only the first; the second name just points at the same pane and its class is never created. Click New to give this pane its own GUID.",
+                    node, "guid"));
+            }
+        }
+    }
+
+    private static void ValidateGuid(RibbonNode node, AttributeDef attr, string value, List<Issue> issues)
+    {
+        if (!Guid.TryParse(value.Trim(), out var guid))
+        {
+            issues.Add(new Issue(IssueSeverity.Error, "guid.invalid",
+                $"'{attr.Label}' is not a valid GUID (expected 8-4-4-4-12 hex digits, e.g. 3F2504E0-4F89-11D3-9A0C-0305E82C3301). Revit reports it at startup and skips the pane.",
+                node, attr.XmlName));
+            return;
+        }
+        if (guid == Guid.Empty)
+        {
+            issues.Add(new Issue(IssueSeverity.Warning, "guid.empty",
+                "The GUID is all zeros, a placeholder. Click New to generate a unique one before deploying.",
+                node, attr.XmlName));
+            return;
+        }
+        if (!string.Equals(value.Trim(), guid.ToString("D"), StringComparison.OrdinalIgnoreCase))
+        {
+            issues.Add(new Issue(IssueSeverity.Warning, "guid.format",
+                $"Revit accepts this GUID, but the usual form is {guid.ToString("D").ToUpperInvariant()} (no braces or parentheses).",
+                node, attr.XmlName));
         }
     }
 

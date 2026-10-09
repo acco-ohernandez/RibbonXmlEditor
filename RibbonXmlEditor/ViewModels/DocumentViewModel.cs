@@ -101,11 +101,30 @@ public sealed class DocumentViewModel : ObservableObject
 
     public ObservableCollection<string> ScannedClasses { get; } = new();
 
+    /// <summary>IDockablePaneProvider classes from the tab DLL plus the Resources DLL next to it (see <see cref="PaneDllNames"/>).</summary>
+    public ObservableCollection<string> ScannedPaneClasses { get; } = new();
+
+    /// <summary>File names of the DLLs that were scanned for pane classes; empty when no DLL is selected.</summary>
+    public List<string> PaneDllNames { get; } = new();
+
+    /// <summary>True when at least one DLL was scanned for pane classes without error, so an unknown pane class is worth a warning.</summary>
+    public bool PaneScanSucceeded { get; set; }
+
     public string DllStatusText => DllPath is null
         ? "No tab DLL selected. Class names are free text."
-        : $"{Path.GetFileName(DllPath)}: {ScannedClasses.Count} command class(es)";
+        : $"{Path.GetFileName(DllPath)}: {ScannedClasses.Count} command class(es), {ScannedPaneClasses.Count} pane class(es)";
 
-    public void NotifyClassesChanged() => OnPropertyChanged(nameof(DllStatusText));
+    public string PaneDllStatusText => DllPath is null
+        ? "No tab DLL selected. Pane class names are free text."
+        : PaneDllNames.Count > 1
+            ? $"{string.Join(" + ", PaneDllNames)}: {ScannedPaneClasses.Count} pane class(es)"
+            : $"{string.Join(" + ", PaneDllNames)}: {ScannedPaneClasses.Count} pane class(es) ({Services.CommandClassScanner.ResourcesDllName} not found next to it)";
+
+    public void NotifyClassesChanged()
+    {
+        OnPropertyChanged(nameof(DllStatusText));
+        OnPropertyChanged(nameof(PaneDllStatusText));
+    }
 
     public RelayCommand SelectDllCommand => Editor.SelectDllCommand;
 

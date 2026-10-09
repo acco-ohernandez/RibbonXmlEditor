@@ -218,6 +218,24 @@ public sealed class EditorViewModel : ObservableObject
         var result = CommandClassScanner.Scan(dllPath);
         foreach (var c in result.ClassNames)
             Document.ScannedClasses.Add(c);
+
+        // Pane classes may live in the tab DLL or in the Resources DLL next to it (the parser follows the tab DLL's references).
+        Document.ScannedPaneClasses.Clear();
+        Document.PaneDllNames.Clear();
+        Document.PaneScanSucceeded = false;
+        var paneClasses = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var paneDll in CommandClassScanner.PaneDllsFor(dllPath))
+        {
+            Document.PaneDllNames.Add(Path.GetFileName(paneDll));
+            var panes = CommandClassScanner.ScanPaneProviders(paneDll);
+            if (panes.Error is null)
+                Document.PaneScanSucceeded = true;
+            foreach (var p in panes.ClassNames)
+                paneClasses.Add(p);
+        }
+        foreach (var p in paneClasses)
+            Document.ScannedPaneClasses.Add(p);
+
         Document.NotifyClassesChanged();
         OnPropertyChanged(nameof(DllStatusText));
         OnPropertyChanged(nameof(HasDll));
@@ -269,7 +287,8 @@ public sealed class EditorViewModel : ObservableObject
         var context = new ValidationContext(
             KnownClasses: Document.ScannedClasses.Count > 0 ? new HashSet<string>(Document.ScannedClasses, StringComparer.Ordinal) : null,
             DllName: Document.DllPath is { } d ? Path.GetFileName(d) : null,
-            ImagesFolder: _settings.EffectiveImagesFolder);
+            ImagesFolder: _settings.EffectiveImagesFolder,
+            KnownPaneClasses: Document.PaneScanSucceeded ? new HashSet<string>(Document.ScannedPaneClasses, StringComparer.Ordinal) : null);
 
         var all = _loadIssues.Concat(RibbonValidator.Validate(Document.Model, context)).ToList();
 

@@ -49,7 +49,31 @@ public static class RibbonSchema
         new ElementDef(ElementKind.Tab, "tab", "Tab",
             "A ribbon tab. Each .ribbon file defines exactly one.",
             new[] { Name(hint: "Tab title shown in the Revit ribbon.") },
-            new[] { ElementKind.Panel }, 0, Unbounded),
+            new[] { ElementKind.Panel, ElementKind.DockablePane }, 0, Unbounded),
+
+        new ElementDef(ElementKind.DockablePane, "dockablepane", "Dockable pane",
+            "A dockable pane (like Revit's Project Browser) registered at startup from a class that implements " +
+            "IDockablePaneProvider (builder 3.1+). It is not a ribbon item: it has no children, sits directly under the tab, " +
+            "and is shown or hidden by a button command through RibbonBuilder.TryGetDockablePane(name). " +
+            "Registering alone only adds the pane to Revit's View > User Interface list; a button whose command class " +
+            "toggles it is the launcher (a panel's \"Add dockable toggle\" creates both). " +
+            "A pane another add-in already registered under the same GUID is reused, not registered twice.",
+            new[]
+            {
+                Name(hint: "Key that commands use to find the pane (RibbonBuilder.TryGetDockablePane). Case-insensitive, unique per file."),
+                new AttributeDef("guid", "GUID", FieldKind.Guid, true,
+                    "Identity of the pane in Revit (DockablePaneId). Any standard GUID format; keep it stable once deployed, " +
+                    "because Revit remembers the pane's layout by it."),
+                new AttributeDef("title", "Title", FieldKind.Text, false,
+                    "Caption shown in Revit (pane header and View > User Interface list); defaults to the name."),
+                new AttributeDef("classname", "Pane class", FieldKind.PaneClassName, true,
+                    "Full name of a public class implementing IDockablePaneProvider with a constructor taking " +
+                    "UIControlledApplication or no parameters. May live in a referenced DLL such as RevitRibbon_MainSourceCode_Resources.dll."),
+                new AttributeDef("startshidden", "Start hidden", FieldKind.TrueOrEmpty, false,
+                    "Hide the pane on the first view activation of the session (Revit shows a newly registered pane); " +
+                    "the ribbon button then shows it on demand."),
+            },
+            Array.Empty<ElementKind>(), 0, 0),
 
         new ElementDef(ElementKind.Panel, "panel", "Panel",
             "A titled group of items inside the tab.",

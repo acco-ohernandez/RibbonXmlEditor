@@ -7,7 +7,7 @@ edited without recompiling (and without a developer, using the Ribbon XML Editor
 
 | | |
 |---|---|
-| **Version** | 3.0.0 (2026-10-01) |
+| **Version** | 3.1.0 (2026-10-08) |
 | **Revit** | 2023, 2024, 2025, 2026, 2027 |
 | **Frameworks** | net48, net8.0-windows, net10.0-windows (C# latest; no features missing on .NET Framework 4.8) |
 | **Dependencies** | `RevitAPIUI.dll` (the `Revit_All_Main_Versions_API_x64` NuGet) and WPF (`BitmapImage`) |
@@ -85,7 +85,7 @@ deployed on some machines, crash on a missing one. The Ribbon XML Editor always 
 
 | Element | Attributes (`*` required) | Allowed children | Notes |
 |---|---|---|---|
-| `tab` | name* | panel | one per file |
+| `tab` | name* | panel, dockablepane | one per file |
 | `panel` | name* | separator, stackeditems, splitbuttons, slideoutpanel, radiobuttons | |
 | `separator` | | | vertical divider |
 | `stackeditems` | | button, pulldownbuttons, combobox, textbox | 1 item = large; 2 or 3 = stacked small rows |
@@ -98,6 +98,7 @@ deployed on some machines, crash on a missing one. The Ribbon XML Editor always 
 | `comboboxmember` | name*, text*, image, groupname | | members with the same `groupname` are listed together |
 | `textbox` | name*, prompttext, longdescription, image, showimage, tooltip, tooltipimage | | `showimage="true"` makes the image a clickable button |
 | `togglebutton` | name*, text*, tooltip, largeimage | | |
+| `dockablepane` | name*, guid*, title, classname*, startshidden | | 3.1+; directly under `tab`, registers an `IDockablePaneProvider` (see *Dockable panes*) |
 
 Captions and tooltips may contain real line breaks inside the quotes; Revit shows them as line breaks.
 Item names must be unique within a panel (Revit rejects duplicates).
@@ -148,6 +149,52 @@ The Ribbon XML Editor does this with *Disable* / *Enable* (right-click the item,
 3.0 skips comments entirely. Builders before 3.0 also skip them, but they count a comment as one of the
 1–3 stacked items, so with an older builder keep enabled + disabled items in a stack at three or fewer.
 
+### Dockable panes (3.1)
+
+A `<dockablepane>` directly under `<tab>` registers a Revit dockable pane (a window like the Project
+Browser) during the same `BuildRibbon` call, which runs in `OnStartup`, the only time
+`RegisterDockablePane` is legal. The pane is not a ribbon item: it has no children, may sit anywhere
+among the panels, and a normal button command shows or hides it.
+
+```xml
+<tab name="ENG Mechanical">
+  <dockablepane name="ACCODocsLibrary"
+                guid="ACC0D0C5-11B2-4A2B-9E77-3F1A6C5B2D41"
+                title="ACCO Link Library"
+                classname="RevitRibbon_MainSourceCode_Resources.Forms.LinkLibrary_Pane"
+                startshidden="true" />
+  <panel name="...">...</panel>
+</tab>
+```
+
+| Attribute | Required | Meaning |
+|---|---|---|
+| `name` | yes | Key that commands look the pane up by (`RibbonBuilder.TryGetDockablePane`). Compared case-insensitively; a second pane with the same name in the file is reported and skipped. |
+| `guid` | yes | Becomes the `DockablePaneId`. Any format `Guid.TryParse` accepts (braces and hyphens optional). Keep it stable once deployed: Revit stores the pane's docked position by it. |
+| `classname` | yes | Full name of a **public class implementing `Autodesk.Revit.UI.IDockablePaneProvider`** with a public constructor taking `UIControlledApplication` (preferred; it is an API context, so the pane can create its own `ExternalEvent` there) or no parameters. Resolved by reflection: the tab DLL first, then every assembly it references (that is how a class in `RevitRibbon_MainSourceCode_Resources.dll` is found), then anything already loaded. |
+| `title` | no | Caption in the pane header and in Revit's *View ▸ User Interface* list. Empty = `name`. |
+| `startshidden` | no | `"true"` hides the pane once, on the first `ViewActivated` of the session. Revit shows a newly registered pane, and the first document's window layout undoes an earlier `Hide`, so this is the earliest reliable point. Anything else = false. |
+
+From a command, find the pane by name and toggle it:
+
+```csharp
+if (RibbonBuilder.TryGetDockablePane("ACCODocsLibrary", out DockablePaneId id))
+{
+    DockablePane pane = commandData.Application.GetDockablePane(id);
+    if (pane.IsShown()) pane.Hide(); else pane.Show();
+}
+// RibbonBuilder.GetDockablePaneProvider("ACCODocsLibrary") returns the UserControl instance this add-in created.
+```
+
+The element only registers the pane (it also appears in Revit's *View ▸ User Interface* list); the
+launcher is an ordinary `<button>` whose command class toggles it, as above. In the Ribbon XML Editor,
+*Add dockable toggle* on a panel creates both entries in one step.
+
+A pane that another add-in already registered under the same guid is **reused**: its id is recorded,
+nothing is registered twice and no problem is reported. The same `<dockablepane>` may therefore appear
+in several tabs' `.ribbon` files, so each tab can host a button for it. The GUID lives only in the
+`.ribbon` file; nothing in the tab's `App` class changes.
+
 ## What happens on errors
 
 Nothing in the file can abort the ribbon. Problems are collected and shown once, in a
@@ -164,6 +211,7 @@ every message still goes to `Debug.WriteLine` and the `Log` callback).
 | Image file missing or unreadable | reported; the item is created without the image |
 | Duplicate item names, invalid URL, other Revit rejections | reported; that item is skipped |
 | Unknown element in the wrong place | reported and ignored |
+| `dockablepane` with an invalid guid, a class that is not found, does not implement `IDockablePaneProvider`, has no usable constructor or whose constructor throws, or `RegisterDockablePane` fails | reported; that pane is skipped, the rest of the tab is built |
 
 Before 3.0 a missing attribute threw at startup (Revit's generic "add-in failed" dialog), and a stack
 with the wrong item count silently dropped the rest of the panel.
@@ -184,3 +232,4 @@ with the wrong item count silently dropped the rest of the panel.
 | 1.0.0 | 2021-06-01 | Created by Alana Bianes |
 | 2.0.0 | 2024-08-22 | Combo box, text box, radio group, split and slide-out support |
 | 3.0.0 | 2026-10-01 | Rewritten as a hardened single-file drop-in: `BuildRibbon` + `RibbonBuildOptions` (file override, logging, combo/text-box events), tolerant attribute reading, per-item error reporting in one dialog, comments never count as items, indexed `PullDown2`/`SplitButton2` names, images loaded with `OnLoad` + `Freeze` so PNGs are not kept locked, relative image paths. `build_ribbon` kept as an obsolete alias. |
+| 3.1.0 | 2026-10-08 | `<dockablepane>` element: registers `IDockablePaneProvider` panes declared in the `.ribbon` file (`name`, `guid`, `title`, `classname`, `startshidden`), reflection-resolved through the tab DLL's references, `TryGetDockablePane` / `GetDockablePane` / `GetDockablePaneProvider` registry, reuse of a guid another add-in already registered, hide-on-first-view. |

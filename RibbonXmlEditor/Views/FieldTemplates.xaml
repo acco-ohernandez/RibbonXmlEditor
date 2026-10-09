@@ -175,4 +175,40 @@
         </StackPanel>
     </DataTemplate>
 
+    <!-- Dockable pane class name: suggestions come from the IDockablePaneProvider scan (tab DLL + Resources DLL) -->
+    <DataTemplate DataType="{x:Type f:PaneClassNameField}">
+        <StackPanel>
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource FieldHeader}" Focusable="False" />
+            <ComboBox Style="{StaticResource FieldComboBox}" IsEditable="True" IsTextSearchEnabled="True"
+                      StaysOpenOnEdit="True"
+                      ItemsSource="{Binding Suggestions}"
+                      Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                      v:FocusBehavior.Field="{Binding}" />
+            <DockPanel Margin="0,4,0,0">
+                <Button DockPanel.Dock="Right" Content="Select tab DLL..." Padding="8,2" Command="{Binding Doc.SelectDllCommand}"
+                        ToolTip="Pick the compiled tab DLL; the editor also scans RevitRibbon_MainSourceCode_Resources.dll in the same folder for pane classes" />
+                <TextBlock Text="{Binding Doc.PaneDllStatusText}" Style="{StaticResource FieldHint}" Margin="0,0,8,0" VerticalAlignment="Center" />
+            </DockPanel>
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource FieldFooter}" Focusable="False" />
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- GUID with a New button -->
+    <DataTemplate DataType="{x:Type f:GuidField}">
+        <StackPanel>
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource FieldHeader}" Focusable="False" />
+            <DockPanel>
+                <Button DockPanel.Dock="Right" Content="New" Padding="10,3" Margin="6,0,0,0"
+                        Command="{Binding NewGuidCommand}" ToolTip="Generate a new GUID"
+                        AutomationProperties.Name="New GUID" />
+                <TextBox Style="{StaticResource FieldTextBox}" FontFamily="Consolas"
+                         Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                         v:FocusBehavior.Field="{Binding}" />
+            </DockPanel>
+            <TextBlock Text="Not a valid GUID." Foreground="{StaticResource ErrorBrush}" FontSize="11" Margin="0,3,0,0"
+                       Visibility="{Binding IsInvalid, Converter={StaticResource BoolToVis}}" />
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource FieldFooter}" Focusable="False" />
+        </StackPanel>
+    </DataTemplate>
+
 </ResourceDictionary>

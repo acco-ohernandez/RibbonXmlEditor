@@ -1,4 +1,4 @@
-// Version 3.0.0 2026-10-01
+// Version 3.1.0 2026-10-08
 //
 // RibbonBuilder — builds a Revit ribbon tab from a .ribbon XML file that sits next to the add-in DLL.
 //
@@ -9,6 +9,13 @@
 //     RibbonBuilder.BuildRibbon(application, Assembly.GetExecutingAssembly().Location,
 //                               Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location));
 //
+// 3.1: a <dockablepane> element directly under <tab> registers a dockable pane during the same call
+// (RegisterDockablePane is only legal in OnStartup, which is exactly when BuildRibbon runs):
+//     <dockablepane name="MyPane" guid="..." title="My Pane"
+//                   classname="Namespace.MyPaneUserControl" startshidden="true" />
+// The class must implement IDockablePaneProvider and have a constructor taking UIControlledApplication
+// (preferred) or no parameters. Commands find the pane by name: RibbonBuilder.TryGetDockablePane(name, out id).
+//
 // Only C# features available on .NET Framework 4.8 are used (no init accessors, records, ranges or
 // collection expressions), and every using is explicit so projects without implicit usings compile too.
 #nullable enable
@@ -17,6 +24,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Media.Imaging;
 using System.Xml;
 using Autodesk.Revit.UI;
@@ -58,7 +66,7 @@ namespace RevitRibbon_MainSourceCode
     /// </summary>
     public static class RibbonBuilder
     {
-        public const string Version = "3.0.0";
+        public const string Version = "3.1.0";
 
         /// <summary>
         /// Builds the ribbon described by the .ribbon file in <paramref name="ribbonFolder"/>.
@@ -104,10 +112,14 @@ namespace RevitRibbon_MainSourceCode
             public const string ComboBoxMember = "comboboxmember";
             public const string TextBox = "textbox";
             public const string ToggleButton = "togglebutton";
+            public const string DockablePane = "dockablepane";
 
             // Attributes
             public const string Name = "name";
             public const string Classname = "classname";
+            public const string Guid = "guid";
+            public const string Title = "title";
+            public const string StartsHidden = "startshidden";
             public const string Text = "text";
             public const string Tooltip = "tooltip";
             public const string Image = "image";
@@ -119,6 +131,70 @@ namespace RevitRibbon_MainSourceCode
             public const string GroupName = "groupname";
             public const string PromptText = "prompttext";
             public const string ShowImage = "showimage";
+        }
+
+        // ---- dockable panes (3.1) ------------------------------------------------------------
+
+        /// <summary>A dockable pane declared by a &lt;dockablepane&gt; element and handled by <see cref="BuildRibbon"/>.</summary>
+        public sealed class DockablePaneRegistration
+        {
+            public DockablePaneRegistration(string name, DockablePaneId id, string title, object? provider)
+            {
+                Name = name;
+                Id = id;
+                Title = title;
+                Provider = provider;
+            }
+
+            /// <summary>The element's name attribute; the key commands look the pane up by.</summary>
+            public string Name { get; }
+
+            /// <summary>The pane id built from the element's guid attribute. Pass it to UIApplication.GetDockablePane.</summary>
+            public DockablePaneId Id { get; }
+
+            public string Title { get; }
+
+            /// <summary>
+            /// The IDockablePaneProvider instance this add-in created and registered, or null when the pane
+            /// was already registered by another add-in (same guid) and only its id was recorded.
+            /// </summary>
+            public object? Provider { get; }
+        }
+
+        // One table per add-in assembly (the shared project compiles into every tab DLL), filled during BuildRibbon.
+        private static readonly Dictionary<string, DockablePaneRegistration> _dockablePanes =
+            new Dictionary<string, DockablePaneRegistration>(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>The pane id for a &lt;dockablepane name="..."&gt; of this add-in's ribbon file. False when no such pane was built.</summary>
+        public static bool TryGetDockablePane(string name, out DockablePaneId id)
+        {
+            DockablePaneRegistration? registration = GetDockablePane(name);
+            id = registration == null ? null! : registration.Id;
+            return registration != null;
+        }
+
+        /// <summary>Everything recorded for a &lt;dockablepane name="..."&gt;, or null.</summary>
+        public static DockablePaneRegistration? GetDockablePane(string name)
+        {
+            if (string.IsNullOrEmpty(name))
+                return null;
+            DockablePaneRegistration? registration;
+            lock (_dockablePanes)
+                return _dockablePanes.TryGetValue(name, out registration) ? registration : null;
+        }
+
+        /// <summary>The provider (the pane's UserControl) this add-in created for the named pane, or null (see <see cref="DockablePaneRegistration.Provider"/>).</summary>
+        public static object? GetDockablePaneProvider(string name) => GetDockablePane(name)?.Provider;
+
+        private static bool TryAddDockablePane(DockablePaneRegistration registration)
+        {
+            lock (_dockablePanes)
+            {
+                if (_dockablePanes.ContainsKey(registration.Name))
+                    return false;
+                _dockablePanes.Add(registration.Name, registration);
+                return true;
+            }
         }
 
         /// <summary>One build run: holds the inputs and the list of problems so helpers need no parameter threading.</summary>
@@ -136,6 +212,10 @@ namespace RevitRibbon_MainSourceCode
             private readonly string _ribbonFolder;
             private readonly RibbonBuildOptions _options;
             private readonly List<string> _problems = new List<string>();
+
+            // Panes declared with startshidden="true": hidden once, on the first ViewActivated of the session.
+            private readonly List<DockablePaneId> _panesToHide = new List<DockablePaneId>();
+            private bool _hideSubscribed;
 
             public Session(UIControlledApplication app, string assemblyPath, string ribbonFolder, RibbonBuildOptions options)
             {
@@ -176,6 +256,7 @@ namespace RevitRibbon_MainSourceCode
                 }
 
                 BuildTab(root);
+                SubscribeStartupHide();
                 Finish(file);
             }
 
@@ -236,10 +317,222 @@ namespace RevitRibbon_MainSourceCode
 
                 foreach (XmlElement child in Elements(tab))
                 {
-                    if (child.Name == XmlNames.Panel)
-                        BuildPanel(tabName, child);
-                    else
-                        Report(Describe(child) + " is not allowed directly under <tab> and was ignored.");
+                    switch (child.Name)
+                    {
+                        case XmlNames.Panel:
+                            BuildPanel(tabName, child);
+                            break;
+                        case XmlNames.DockablePane:
+                            BuildDockablePane(child);
+                            break;
+                        default:
+                            Report(Describe(child) + " is not allowed directly under <tab> and was ignored.");
+                            break;
+                    }
+                }
+            }
+
+            // ---- dockable panes (3.1) -------------------------------------------------------
+
+            /// <summary>
+            /// Registers the pane described by a &lt;dockablepane&gt; element. Required: name, guid, classname.
+            /// Optional: title (defaults to name), startshidden="true" (the pane is hidden on the first view activation,
+            /// because Revit shows a newly registered pane and the first document view would undo an earlier Hide).
+            /// A pane that another add-in already registered under the same guid is recorded (so this add-in's
+            /// commands can still show it) but not registered again.
+            /// </summary>
+            private void BuildDockablePane(XmlElement element)
+            {
+                if (!Require(element, XmlNames.Name, XmlNames.Guid, XmlNames.Classname))
+                    return;
+
+                string name = Attr(element, XmlNames.Name).Trim();
+                Guid guid;
+                if (!System.Guid.TryParse(Attr(element, XmlNames.Guid).Trim(), out guid))
+                {
+                    Report(Describe(element) + ": guid \"" + Attr(element, XmlNames.Guid) + "\" is not a valid GUID; the pane was skipped.");
+                    return;
+                }
+
+                string title = Attr(element, XmlNames.Title).Trim();
+                if (title.Length == 0)
+                    title = name;
+                bool startsHidden = string.Equals(Attr(element, XmlNames.StartsHidden).Trim(), "true", StringComparison.OrdinalIgnoreCase);
+
+                DockablePaneId paneId = new DockablePaneId(guid);
+
+                bool alreadyExists;
+                try
+                {
+                    alreadyExists = DockablePane.PaneExists(paneId);
+                }
+                catch (Exception ex)
+                {
+                    Report(Describe(element) + ": could not query the pane state (" + ex.Message + "); the pane was skipped.");
+                    return;
+                }
+
+                object? provider = null;
+                if (alreadyExists)
+                {
+                    Debug.WriteLine("[RibbonBuilder] " + Describe(element) + " is already registered by another add-in; reusing it.");
+                }
+                else
+                {
+                    string className = Attr(element, XmlNames.Classname).Trim();
+                    Type? type = ResolveType(className);
+                    if (type == null)
+                    {
+                        Report(Describe(element) + ": class \"" + className + "\" was not found in " + System.IO.Path.GetFileName(_assemblyPath) + " or the assemblies it references; the pane was skipped.");
+                        return;
+                    }
+                    if (!typeof(IDockablePaneProvider).IsAssignableFrom(type))
+                    {
+                        Report(Describe(element) + ": class \"" + className + "\" does not implement IDockablePaneProvider; the pane was skipped.");
+                        return;
+                    }
+
+                    provider = CreateProvider(type, element);
+                    if (provider == null)
+                        return;
+
+                    try
+                    {
+                        _app.RegisterDockablePane(paneId, title, (IDockablePaneProvider)provider);
+                    }
+                    catch (Exception ex)
+                    {
+                        Report(Describe(element) + ": RegisterDockablePane failed (" + ex.Message + "); the pane was skipped.");
+                        return;
+                    }
+                    Debug.WriteLine("[RibbonBuilder] " + Describe(element) + " registered as \"" + title + "\".");
+                }
+
+                if (!TryAddDockablePane(new DockablePaneRegistration(name, paneId, title, provider)))
+                {
+                    Report(Describe(element) + ": a pane with this name was already built; the duplicate was ignored.");
+                    return;
+                }
+
+                if (startsHidden)
+                    _panesToHide.Add(paneId);
+            }
+
+            /// <summary>Instantiates the pane class: a constructor taking UIControlledApplication is preferred, else a parameterless one.</summary>
+            private object? CreateProvider(Type type, XmlElement element)
+            {
+                ConstructorInfo? withApp = type.GetConstructor(new[] { typeof(UIControlledApplication) });
+                ConstructorInfo? parameterless = withApp == null ? type.GetConstructor(Type.EmptyTypes) : null;
+                if (withApp == null && parameterless == null)
+                {
+                    Report(Describe(element) + ": class \"" + type.FullName + "\" needs a public constructor taking UIControlledApplication or no parameters; the pane was skipped.");
+                    return null;
+                }
+
+                try
+                {
+                    return withApp != null ? withApp.Invoke(new object[] { _app }) : parameterless!.Invoke(null);
+                }
+                catch (TargetInvocationException ex)
+                {
+                    Exception inner = ex.InnerException ?? ex;
+                    Report(Describe(element) + ": the constructor of \"" + type.FullName + "\" threw " + inner.GetType().Name + ": " + inner.Message + "; the pane was skipped.");
+                    return null;
+                }
+                catch (Exception ex)
+                {
+                    Report(Describe(element) + ": could not create \"" + type.FullName + "\" (" + ex.Message + "); the pane was skipped.");
+                    return null;
+                }
+            }
+
+            /// <summary>
+            /// Finds a type by full name in the add-in assembly (this one), then in the assemblies it references
+            /// (e.g. the Resources class library), then in anything else already loaded.
+            /// </summary>
+            private static Type? ResolveType(string fullName)
+            {
+                Assembly addin = typeof(RibbonBuilder).Assembly;
+                Type? type = addin.GetType(fullName, false);
+                if (type != null)
+                    return type;
+
+                foreach (AssemblyName reference in addin.GetReferencedAssemblies())
+                {
+                    try
+                    {
+                        type = Assembly.Load(reference).GetType(fullName, false);
+                    }
+                    catch (Exception)
+                    {
+                        type = null; // a reference that cannot load here (e.g. a Revit API facade) is simply not the one
+                    }
+                    if (type != null)
+                        return type;
+                }
+
+                foreach (Assembly loaded in AppDomain.CurrentDomain.GetAssemblies())
+                {
+                    try
+                    {
+                        type = loaded.GetType(fullName, false);
+                    }
+                    catch (Exception)
+                    {
+                        type = null;
+                    }
+                    if (type != null)
+                        return type;
+                }
+                return null;
+            }
+
+            private void SubscribeStartupHide()
+            {
+                if (_panesToHide.Count == 0 || _hideSubscribed)
+                    return;
+                try
+                {
+                    // ApplicationInitialized is too early: the layout applied when the first document view opens
+                    // would show the pane again. The first ViewActivated of the session is the earliest reliable point.
+                    _app.ViewActivated += OnFirstViewActivated;
+                    _hideSubscribed = true;
+                }
+                catch (Exception ex)
+                {
+                    Report("Could not subscribe to ViewActivated to hide " + _panesToHide.Count + " dockable pane(s) at startup: " + ex.Message);
+                }
+            }
+
+            private void OnFirstViewActivated(object? sender, ViewActivatedEventArgs e)
+            {
+                if (!_hideSubscribed)
+                    return;
+                _hideSubscribed = false;
+
+                UIApplication? uiapp = sender as UIApplication;
+                foreach (DockablePaneId paneId in _panesToHide)
+                {
+                    try
+                    {
+                        if (uiapp != null)
+                            uiapp.GetDockablePane(paneId).Hide();
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine("[RibbonBuilder] startup hide of pane " + paneId.Guid + " failed: " + ex.Message);
+                    }
+                }
+                _panesToHide.Clear();
+
+                // Event callbacks run inside an API context, which both subscribing and unsubscribing require.
+                try
+                {
+                    _app.ViewActivated -= OnFirstViewActivated;
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine("[RibbonBuilder] could not unsubscribe ViewActivated: " + ex.Message);
                 }
             }
 
@@ -776,6 +1069,7 @@ namespace RevitRibbon_MainSourceCode
 
 
 ////////////////////////////////////////////
-// 3.0.0 2026-10-01 — hardened version Updated by Orlando Hernandez, options, single-file drop-in 
+// 3.1.0 2026-10-08 — <dockablepane> element: registers IDockablePaneProvider panes from the .ribbon file (startshidden, TryGetDockablePane registry) by Orlando Hernandez
+// 3.0.0 2026-10-01 — hardened version Updated by Orlando Hernandez, options, single-file drop-in
 // 2.0.0 2024-08-22 - Original Version Created 06/01/21 by Alana Bianes
 ////////////////////////////////////////////

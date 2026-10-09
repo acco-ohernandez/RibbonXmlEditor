@@ -24,6 +24,9 @@
                             </Style>
                         </MenuItem.ItemContainerStyle>
                     </MenuItem>
+                    <MenuItem Header="Add dockable _toggle (pane + button)" Command="{Binding AddDockableToggleCommand}"
+                              Visibility="{Binding CanAddDockableToggle, Converter={StaticResource TreeBoolToVis}}"
+                              ToolTip="Adds a dockable pane to the tab and a launcher button to this panel" />
                     <MenuItem Header="D_uplicate" Command="{Binding DuplicateCommand}" />
                     <MenuItem Header="{Binding ToggleEnabledHeader}" Command="{Binding ToggleEnabledCommand}" InputGestureText="Ctrl+E"
                               ToolTip="A disabled item stays in the file as a comment and is skipped by Revit" />

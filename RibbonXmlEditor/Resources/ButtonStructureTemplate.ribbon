@@ -2,6 +2,14 @@
 <!-- Version 1.0.0 2023-03-14 -->
 <tab name="Template Tab">
 
+  <!--
+  <dockablepane name="TemplatePane"
+                guid="00000000-0000-0000-0000-000000000000"
+                title="Template Pane"
+                classname="RevitRibbon_MainSourceCode_Resources.Forms.TemplatePane"
+                startshidden="true" />
+  -->
+
   <panel name="Stacked Items">
     <stackeditems>
       <button name="SingleButton"

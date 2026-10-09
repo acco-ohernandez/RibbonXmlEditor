@@ -75,8 +75,47 @@ public abstract class FieldViewModel : ObservableObject
         FieldKind.ClassName => new ClassNameField(owner, def),
         FieldKind.Url => new UrlField(owner, def),
         FieldKind.TrueOrEmpty => new TrueOrEmptyField(owner, def),
+        FieldKind.Guid => new GuidField(owner, def),
+        FieldKind.PaneClassName => new PaneClassNameField(owner, def),
         _ => throw new NotSupportedException($"Unknown field kind {def.Kind}."),
     };
+}
+
+/// <summary>A GUID with a "New" button. Any format Guid.TryParse accepts is valid; New writes the upper-case D form.</summary>
+public sealed class GuidField : FieldViewModel
+{
+    public GuidField(NodeViewModel owner, AttributeDef def) : base(owner, def)
+    {
+        NewGuidCommand = new RelayCommand(NewGuid);
+    }
+
+    public RelayCommand NewGuidCommand { get; }
+
+    public bool IsValid => Value.Length == 0 || Guid.TryParse(Value.Trim(), out _);
+    public bool IsInvalid => !IsValid;
+
+    protected override void OnValueChanged()
+    {
+        OnPropertyChanged(nameof(IsValid));
+        OnPropertyChanged(nameof(IsInvalid));
+    }
+
+    private void NewGuid()
+    {
+        if (Value.Trim().Length > 0 && Guid.TryParse(Value.Trim(), out var current) && current != Guid.Empty
+            && !Dialogs.Confirm("Replace the current GUID with a new one?\n\nRevit identifies the pane (and remembers its docked position) by this value, so a deployed pane gets a fresh identity."))
+            return;
+        Value = Guid.NewGuid().ToString("D").ToUpperInvariant();
+    }
+}
+
+/// <summary>Pane class name with suggestions from the IDockablePaneProvider scan of the tab DLL and the Resources DLL next to it.</summary>
+public sealed class PaneClassNameField : FieldViewModel
+{
+    public PaneClassNameField(NodeViewModel owner, AttributeDef def) : base(owner, def) { }
+
+    public ObservableCollection<string> Suggestions => Owner.Doc.ScannedPaneClasses;
+    public DocumentViewModel Doc => Owner.Doc;
 }
 
 public sealed class TextField : FieldViewModel

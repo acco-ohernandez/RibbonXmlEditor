@@ -39,6 +39,7 @@ public sealed class NodeViewModel : ObservableObject
         MoveDownCommand = new RelayCommand(() => Move(+1), () => Parent is not null && Node.IndexInParent < Parent.Children.Count - 1);
         SelectCommand = new RelayCommand(SelectFromPreview);
         ToggleEnabledCommand = new RelayCommand(() => IsDisabled = !IsDisabled, () => CanToggleEnabled);
+        AddDockableToggleCommand = new RelayCommand(() => AddDockableToggle(), () => CanAddDockableToggle);
     }
 
     public RibbonNode Node { get; }
@@ -64,6 +65,11 @@ public sealed class NodeViewModel : ObservableObject
 
     /// <summary>Disable / Enable: a disabled node is saved as an XML comment and skipped by Revit.</summary>
     public RelayCommand ToggleEnabledCommand { get; }
+
+    /// <summary>Panel only: adds a &lt;dockablepane&gt; to the tab and a launcher button to this panel in one step.</summary>
+    public RelayCommand AddDockableToggleCommand { get; }
+
+    public bool CanAddDockableToggle => Node.Kind == ElementKind.Panel;
 
     // ---- enabled / disabled ----------------------------------------------------------
 
@@ -153,6 +159,7 @@ public sealed class NodeViewModel : ObservableObject
         ElementKind.TextBox => "▭",
         ElementKind.ComboBoxMember => "•",
         ElementKind.ToggleButton => "◐",
+        ElementKind.DockablePane => "DP",
         _ => "?",
     };
 
@@ -167,6 +174,7 @@ public sealed class NodeViewModel : ObservableObject
         ElementKind.PulldownButtons => Brushes.DarkOliveGreen,
         ElementKind.ComboBox or ElementKind.TextBox => Brushes.Peru,
         ElementKind.ComboBoxMember or ElementKind.ToggleButton => Brushes.DarkKhaki,
+        ElementKind.DockablePane => Brushes.DarkMagenta,
         _ => Brushes.Gray,
     };
 
@@ -232,6 +240,9 @@ public sealed class NodeViewModel : ObservableObject
                     return FirstNonEmpty(Node["prompttext"], name, "(text box)");
                 case ElementKind.Separator or ElementKind.StackedItems or ElementKind.SplitButtons:
                     return Def.DisplayName;
+                case ElementKind.DockablePane:
+                    // Revit captions the pane with title, falling back to name (the parser does the same).
+                    return FirstNonEmpty(Node["title"], name, "(dockable pane)");
                 default:
                     return FirstNonEmpty(name, string.Empty, "(unnamed)");
             }
@@ -239,6 +250,13 @@ public sealed class NodeViewModel : ObservableObject
     }
 
     public string CaptionSingleLine => Caption.Replace('\n', ' ');
+
+    /// <summary>A dockable pane declared with startshidden="true" (shown ghosted-closed in the preview strip).</summary>
+    public bool IsStartsHidden => Node.Kind == ElementKind.DockablePane
+                                  && string.Equals(Node["startshidden"].Trim(), "true", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>True when this tab declares at least one dockable pane (the preview shows a strip for them).</summary>
+    public bool HasDockablePanes => Children.Any(c => c.Node.Kind == ElementKind.DockablePane);
 
     /// <summary>16 px image from the <c>image</c> attribute, or null when empty or missing. Cached until the attribute changes.</summary>
     public BitmapSource? SmallImage
@@ -373,10 +391,13 @@ public sealed class NodeViewModel : ObservableObject
     {
         switch (xmlName)
         {
-            case "name" or "text" or "itemtext" or "prompttext":
+            case "name" or "text" or "itemtext" or "prompttext" or "title":
                 OnPropertyChanged(nameof(Header));
                 OnPropertyChanged(nameof(Caption));
                 OnPropertyChanged(nameof(CaptionSingleLine));
+                break;
+            case "startshidden":
+                OnPropertyChanged(nameof(IsStartsHidden));
                 break;
             case "image" or "largeimage":
                 _smallImageLoaded = false;
@@ -397,6 +418,7 @@ public sealed class NodeViewModel : ObservableObject
         OnPropertyChanged(nameof(Header));
         OnPropertyChanged(nameof(FirstChild));
         OnPropertyChanged(nameof(Slideout));
+        OnPropertyChanged(nameof(HasDockablePanes));
         foreach (var o in AddChildOptions)
             o.Refresh();
         foreach (var c in Children)
@@ -423,6 +445,55 @@ public sealed class NodeViewModel : ObservableObject
         ChildrenChanged();
         vm.IsSelected = true;
         return vm;
+    }
+
+    /// <summary>
+    /// A registered pane is only a window; a button whose command toggles it is the launcher. This creates both:
+    /// the &lt;dockablepane&gt; on the tab (grouped after any existing panes) and a large button in a new stack in
+    /// this panel, with linked defaults. The pane class and the button's command class are left for the user.
+    /// Returns the pane, which is selected.
+    /// </summary>
+    public NodeViewModel AddDockableToggle()
+    {
+        if (!CanAddDockableToggle)
+            throw new InvalidOperationException("A dockable toggle is added from a panel node.");
+
+        var tab = Doc.Root;
+        var takenPaneNames = tab.Children.Where(c => c.Node.Kind == ElementKind.DockablePane).Select(c => c.Node.Name.Trim());
+        var (paneName, suffix) = NextFreeName(takenPaneNames, "NewPane");
+        var title = suffix.Length == 0 ? "New Pane" : "New Pane " + suffix;
+
+        int lastPane = -1;
+        for (int i = 0; i < tab.Children.Count; i++)
+        {
+            if (tab.Children[i].Node.Kind == ElementKind.DockablePane)
+                lastPane = i;
+        }
+
+        // The button first: AddChild selects what it creates, so the pane, created last, ends up selected.
+        var button = AddChild(ElementKind.StackedItems).AddChild(ElementKind.Button);
+        button.GetField("name")!.Value = "btn_" + paneName;
+        button.GetField("text")!.Value = title;
+
+        var pane = tab.AddChild(ElementKind.DockablePane, lastPane + 1);
+        pane.GetField("name")!.Value = paneName;
+        pane.GetField("guid")!.Value = Guid.NewGuid().ToString("D").ToUpperInvariant();
+        pane.GetField("title")!.Value = title;
+        pane.GetField("startshidden")!.Value = "true";
+        return pane;
+    }
+
+    /// <summary>"NewPane", then "NewPane2", "NewPane3"… (case-insensitive, as the parser compares pane names).</summary>
+    private static (string name, string suffix) NextFreeName(IEnumerable<string> taken, string stem)
+    {
+        var set = new HashSet<string>(taken, StringComparer.OrdinalIgnoreCase);
+        if (!set.Contains(stem))
+            return (stem, string.Empty);
+        for (int n = 2; ; n++)
+        {
+            if (!set.Contains(stem + n))
+                return (stem + n, n.ToString());
+        }
     }
 
     private void Delete()
